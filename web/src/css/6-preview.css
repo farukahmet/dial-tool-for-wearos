@@ -161,7 +161,7 @@
   #app.show :is(.sky, .pool) { opacity: 1; }
   #app.show main { --on-canvas: var(--white); --off-canvas: var(--ink); }
   #app.show :is(.undos, .guides, .backdrops, .shadows, .tip) { visibility: hidden; }
-  #app.show :is(#eye-box, .irisgo) { display: none; }
+  #app.show :is(#eye-box, #bezel-box, .irisgo) { display: none; }
   /* in the showcase the X and Now are larger and less faint, and stand as far in from the window's edges as the mark
      does at the top left: the margin (05:43: "too close to edges, too faint… fit them inside the imaginary padding logo
      top left got") */
