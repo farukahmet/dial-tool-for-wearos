@@ -801,7 +801,7 @@ class DialTool {
     this.scrolls = {};                             // how far each section was scrolled (the window's state, not the dial's)
     this.log_lines = [];
     let saved_bezel = null;
-    try { saved_bezel = JSON.parse(localStorage.getItem("dial-tool-bezel")); } catch (e) {}
+    try { saved_bezel = JSON.parse(localStorage.getItem("dial-tool-bezel")); } catch (e) { }
     this.bezel_on = visual?.bezel_on ?? saved_bezel?.on ?? false;
     this.bezel_id = visual?.bezel_id ?? saved_bezel?.id ?? "pixel4";
     this.build_window();
@@ -1082,7 +1082,7 @@ class DialTool {
    *  23:19: "say cmd+scroll is zoom in out attached to the zoom area. Put a magnifier icon at the end"; 23:26: "at the
    *  end, not a button, faint"). On a screen without a pointer the words say what a finger does. */
   zoom_hint() {
-    return el("span", { className: "zoomhint" }, el("span", { textContent: "⌘ + scroll to zoom" }));      // words only: the magnifier went into Fit (Okay, 15 Oct 2026, 00:51)
+    return el("span", { className: "zoomhint" }, el("span", { textContent: "mouse scroll to zoom" }));      // words only: the magnifier went into Fit (Okay, 15 Oct 2026, 00:51)
   }
 
   /** a phone: the switches on the preview show only their signs; a tap on the empty backdrop unfolds their words for
@@ -4145,7 +4145,7 @@ class DialTool {
         m.front.style.display = show;
       }
     }
-    try { localStorage.setItem("dial-tool-bezel", JSON.stringify({ on: turn_on ? true : this.bezel_on, id: this.bezel_id })); } catch (e) {}
+    try { localStorage.setItem("dial-tool-bezel", JSON.stringify({ on: turn_on ? true : this.bezel_on, id: this.bezel_id })); } catch (e) { }
     this.toggle_bezel(turn_on ? true : this.bezel_on);
   }
 
@@ -4154,7 +4154,7 @@ class DialTool {
     if (this.bezel_button) this.bezel_button.setAttribute("aria-pressed", String(this.bezel_on));
     if (this.bezel_back) this.bezel_back.style.display = this.bezel_on ? "" : "none";
     if (this.bezel_front) this.bezel_front.style.display = this.bezel_on ? "" : "none";
-    try { localStorage.setItem("dial-tool-bezel", JSON.stringify({ on: this.bezel_on, id: this.bezel_id })); } catch (e) {}
+    try { localStorage.setItem("dial-tool-bezel", JSON.stringify({ on: this.bezel_on, id: this.bezel_id })); } catch (e) { }
     if (this.fitted) this.fit();
     else this.place();
     this.render();
@@ -4916,26 +4916,58 @@ class DialTool {
       e.preventDefault();
       if (this.show) return;                       // the showcase: the dial stays where it is
       this.hover(null);
-      if (e.ctrlKey || e.metaKey) this.zoom(Math.exp(-e.deltaY * 0.01), at(e));      // pinch, or ⌘ / ctrl + scroll
-      else { this.fitted = false; this.c = [this.c[0] - e.deltaX, this.c[1] - e.deltaY]; this.place(); }
+      if (e.ctrlKey || e.metaKey) {
+        // cmd+scroll (or ctrl+scroll on PC): scroll up and down
+        const dy = e.deltaMode === 1 ? e.deltaY * 24 : e.deltaY;
+        const dx = e.deltaMode === 1 ? e.deltaX * 24 : e.deltaX;
+        this.fitted = false;
+        this.c = [this.c[0] - dx, this.c[1] - dy];
+        this.place();
+      } else {
+        // mouse wheel: zoom in and out
+        const factor = e.deltaMode === 1 ? -e.deltaY * 0.04 : -e.deltaY * 0.0015;
+        this.zoom(Math.exp(factor), at(e));
+      }
     }, { passive: false });
     // fingers and the mouse, each tracked by its id (#152: one shared `down` let a second finger reset the pan and
     // both fingers drag it from different places — the jump at the start of a pinch). One pointer pans (or clicks,
     // if it hasn't moved); two pinch: the zoom follows their distance, the pan their midpoint.
-    const pts = new Map();                         // pointerId → where it is now
-    let down = null;                               // one pointer: {p, c, moved} · two: {d, mid, moved}
-    const pair = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; };
+    const pts = new Map();                         // pointerId → { p, is_middle }
+    let down = null;                               // one pointer: {p, c, moved, can_pan} · two: {d, mid, moved, can_pan}
+    const pair = () => {
+      const [a, b] = [...pts.values()].map((v) => v.p);
+      return { d: Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] };
+    };
     const restart = () => {                        // a pointer came or went: start again from where they all are now
       const moved = down ? down.moved : false;
-      if (pts.size === 1) down = { p: [...pts.values()][0], c: this.c.slice(), moved };
-      else if (pts.size >= 2) down = { ...pair(), moved: true };      // a pinch is never a click
-      else down = null;
+      if (pts.size === 1) {
+        const item = [...pts.values()][0];
+        down = { p: item.p, c: this.c.slice(), moved, can_pan: item.is_middle };
+      } else if (pts.size >= 2) {
+        down = { ...pair(), moved: true, can_pan: true };      // double-finger gesture pans and zooms
+      } else {
+        down = null;
+      }
     };
-    this.svg.addEventListener("pointerdown", (e) => { pts.set(e.pointerId, at(e)); this.svg.setPointerCapture(e.pointerId); if (pts.size === 1) down = null; restart(); if (this.show && pts.size === 1) { this.show.dragging = true; this.sun_to(at(e)); } });      // the showcase: the sun to the pointer, along its day
+    this.svg.addEventListener("auxclick", (e) => { if (e.button === 1) e.preventDefault(); });
+    this.svg.addEventListener("pointerdown", (e) => {
+      const is_middle = e.button === 1;
+      if (is_middle) {
+        e.preventDefault();
+        this.svg.style.cursor = "grabbing";
+      }
+      pts.set(e.pointerId, { p: at(e), is_middle });
+      this.svg.setPointerCapture(e.pointerId);
+      if (pts.size === 1) down = null;
+      restart();
+      if (this.show && pts.size === 1) { this.show.dragging = true; this.sun_to(at(e)); }
+    });
     this.svg.addEventListener("pointermove", (e) => {
       if (this.gizmo_dragging) return;
       if (!pts.has(e.pointerId)) return e.pointerType === "mouse" ? this.hover(at(e), document.elementFromPoint(e.clientX, e.clientY)) : null;
-      pts.set(e.pointerId, at(e));
+      const curr = at(e);
+      const item = pts.get(e.pointerId);
+      if (item) item.p = curr;
       if (pts.size >= 2) {
         if (this.show) return;                     // the showcase: no pinch, only the sun
         const now = pair();
@@ -4945,14 +4977,22 @@ class DialTool {
         down.d = now.d; down.mid = now.mid;
         return;
       }
-      const p = at(e);
+      const p = curr;
       if (this.show) { this.sun_to(p); return; }      // the showcase: a drag moves the sun, not the dial
       if (Math.hypot(p[0] - down.p[0], p[1] - down.p[1]) > 4) down.moved = true;
-      if (down.moved) { this.hover(null); this.fitted = false; this.c = [down.c[0] + p[0] - down.p[0], down.c[1] + p[1] - down.p[1]]; this.place(); }
+      if (down.moved && down.can_pan) {
+        this.hover(null);
+        this.fitted = false;
+        this.c = [down.c[0] + p[0] - down.p[0], down.c[1] + p[1] - down.p[1]];
+        this.place();
+      }
     });
     const up = (e) => {
       if (!pts.has(e.pointerId)) return;
-      const click = pts.size === 1 && down && !down.moved && e.type === "pointerup" && !this.show;
+      const item = pts.get(e.pointerId);
+      const is_middle = item ? item.is_middle : false;
+      const click = pts.size === 1 && down && !down.moved && !is_middle && e.type === "pointerup" && !this.show;
+      if (is_middle) this.svg.style.cursor = "";
       if (this.show) { this.show.dragging = false; this.show.at = performance.now(); }
       pts.delete(e.pointerId);
       if (click) this.clicked(at(e), document.elementFromPoint(e.clientX, e.clientY));
@@ -5379,7 +5419,7 @@ class DialTool {
         for (const k of ["guides", "c_backdrop"]) if (k in this.S) viz[k] = this.S[k];
         for (const k of Object.keys(this.S)) if (k.startsWith("gd_") || k.startsWith("sh_")) viz[k] = this.S[k];
         localStorage.setItem("dial-tool-visualizer", JSON.stringify(viz));
-      } catch (e) {}
+      } catch (e) { }
       try { history.replaceState(null, "", await this.show_link()); } catch (e) { /* the address stays as it was */ }
     }, 400);
   }
@@ -5420,7 +5460,7 @@ export async function open_window(pathkit, harfbuzz, font_bytes) {
   try {
     const saved_viz = JSON.parse(localStorage.getItem("dial-tool-visualizer"));
     if (saved_viz && typeof saved_viz === "object") settings = { ...settings, ...saved_viz };
-  } catch (e) {}
+  } catch (e) { }
   tool = new DialTool(settings);
   const opened = (link) => {
     if (link.settings) { tool.log("opened the dial in the address"); return; }

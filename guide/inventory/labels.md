@@ -13,7 +13,7 @@
 | "Turn it with its radius Only off the quarters: at 4 it turns 30°, at half past four 45°." | text | Windows › window 0 › shows 0 › shape 0 | 40 |
 | + | button | Dial | 152 |
 | − | button | Dial | 152 |
-| ⌘ + scroll to zoom | text | Dial | 153 |
+| mouse scroll to zoom | text | Dial | 153 |
 | 0 new moon · 14.8 full. | text | Windows › window 0 › shows 3 › shape 0 | 20 |
 | 1 · 12 | option | Rings | 16 |
 | 10 · 9 | option | Rings | 16 |
