@@ -784,7 +784,7 @@ const dial_text = (S) => JSON.stringify(S, (key, value) => (key === "t" || key.s
 // ── the tool ─────────────────────────────────────────────────
 
 class DialTool {
-  constructor(settings) {
+  constructor(settings, visual = null) {
     this.S = G.fresh_settings(settings);
     this.opened = structuredClone(this.S);      // the dial as it opened: a quiet number is grey until it differs from this (#250)
     this.statik = null;                            // everything that doesn't move, rebuilt when geometry changes
@@ -800,6 +800,10 @@ class DialTool {
     this.rows = [];
     this.scrolls = {};                             // how far each section was scrolled (the window's state, not the dial's)
     this.log_lines = [];
+    let saved_bezel = null;
+    try { saved_bezel = JSON.parse(localStorage.getItem("dial-tool-bezel")); } catch (e) {}
+    this.bezel_on = visual?.bezel_on ?? saved_bezel?.on ?? false;
+    this.bezel_id = visual?.bezel_id ?? saved_bezel?.id ?? "pixel4";
     this.build_window();
     if (!DialTool.listening) {                     // once for the page: the tool that is open now gets the press
       DialTool.listening = true;
@@ -842,6 +846,7 @@ class DialTool {
     }
     this.show_section();
     this.fit();
+    if (visual?.dial_alone) this.dial_alone(true);
     this.sync_time();
     this.render();
     this.log(`Dial Tool · ${G.VERSION} · shapes: PathKit · text: HarfBuzz`);
@@ -970,8 +975,6 @@ class DialTool {
     this.sky_stops = [0, 1].map((o) => { const s = svg_el("stop"); s.setAttribute("offset", String(o)); sky.append(s); return s; });
     sky_defs.append(sky);
     this.sky = svg_el("rect");
-    this.bezel_on = false;
-    this.bezel_id = "pixel4";
     this.build_bezel_svg(sky_defs);
     this.gizmo = svg_el("g");
     this.gizmo.setAttribute("class", "gizmo");
@@ -1448,7 +1451,7 @@ class DialTool {
     this.iris_open(false);
     const bezel = el("button", { type: "button", className: "onview eyebox bezelbox", id: "bezel-box", title: "Watch bezel preview", ariaLabel: "Watch bezel preview" });
     bezel.innerHTML = icon(TOOL_ICONS.bezel, 30);
-    bezel.setAttribute("aria-pressed", "false");
+    bezel.setAttribute("aria-pressed", String(this.bezel_on));
     bezel.onclick = () => this.toggle_bezel();
     this.bezel_button = bezel;
     const bezel_menu = el("div", { className: "bezelmenu night", id: "bezel-menu", hidden: true });
@@ -4142,6 +4145,7 @@ class DialTool {
         m.front.style.display = show;
       }
     }
+    try { localStorage.setItem("dial-tool-bezel", JSON.stringify({ on: turn_on ? true : this.bezel_on, id: this.bezel_id })); } catch (e) {}
     this.toggle_bezel(turn_on ? true : this.bezel_on);
   }
 
@@ -4150,6 +4154,7 @@ class DialTool {
     if (this.bezel_button) this.bezel_button.setAttribute("aria-pressed", String(this.bezel_on));
     if (this.bezel_back) this.bezel_back.style.display = this.bezel_on ? "" : "none";
     if (this.bezel_front) this.bezel_front.style.display = this.bezel_on ? "" : "none";
+    try { localStorage.setItem("dial-tool-bezel", JSON.stringify({ on: this.bezel_on, id: this.bezel_id })); } catch (e) {}
     if (this.fitted) this.fit();
     else this.place();
     this.render();
@@ -4159,17 +4164,19 @@ class DialTool {
     this.bezel_back = svg_el("g");
     this.bezel_back.setAttribute("class", "bezel-back");
     this.bezel_back.setAttribute("pointer-events", "none");
-    this.bezel_back.style.display = "none";
+    this.bezel_back.style.display = this.bezel_on ? "" : "none";
 
     this.bezel_front = svg_el("g");
     this.bezel_front.setAttribute("class", "bezel-front");
     this.bezel_front.setAttribute("pointer-events", "none");
-    this.bezel_front.style.display = "none";
+    this.bezel_front.style.display = this.bezel_on ? "" : "none";
 
     const pixel4 = this.build_pixel4_svg(defs);
     const srpd63 = this.build_srpd63_svg(defs);
-    srpd63.back.style.display = "none";
-    srpd63.front.style.display = "none";
+    pixel4.back.style.display = this.bezel_id === "pixel4" ? "" : "none";
+    pixel4.front.style.display = this.bezel_id === "pixel4" ? "" : "none";
+    srpd63.back.style.display = this.bezel_id === "srpd63" ? "" : "none";
+    srpd63.front.style.display = this.bezel_id === "srpd63" ? "" : "none";
 
     this.bezel_back.append(pixel4.back, srpd63.back);
     this.bezel_front.append(pixel4.front, srpd63.front);
@@ -5270,13 +5277,26 @@ class DialTool {
 
   /** start again with new settings (the simplest way to update every control). */
   reopen(settings) {
+    const visualizer_keys = ["guides", "c_backdrop"];
+    for (const k of Object.keys(this.S)) {
+      if (k.startsWith("gd_") || k.startsWith("sh_")) visualizer_keys.push(k);
+    }
+    const visualizer_state = {};
+    for (const k of visualizer_keys) {
+      if (k in this.S) visualizer_state[k] = structuredClone(this.S[k]);
+    }
+    const visual = {
+      bezel_on: this.bezel_on,
+      bezel_id: this.bezel_id,
+      dial_alone: this.eye_button ? this.eye_button.getAttribute("aria-pressed") === "true" : false,
+    };
     // the window is built again for the new dial: it keeps where it was scrolled, so a Gallery card pressed stays under
     // the finger (Okay, 15 Oct 2026, 11:49: "Found the real jumper: selecting a gallery watch" — measured: the form went
     // back to its top, the Gallery 550 points down, out of sight)
     const panel = $(".panel"), keep = { form: this.form ? this.form.scrollTop : 0, panel: panel ? panel.scrollTop : 0, scrolls: { ...this.scrolls, ...(this.section_shown ? { [this.section_shown]: this.form.scrollTop } : {}) } };
     this.close();
     const fonts = this.catalog;
-    tool = new DialTool(settings);
+    tool = new DialTool({ ...settings, ...visualizer_state }, visual);
     for (const [ps, f] of fonts) if (!tool.catalog.has(ps)) tool.catalog.set(ps, f);
     tool.load_fonts_in_use();
     window.dial_tool = tool;
@@ -5334,7 +5354,7 @@ class DialTool {
     if (!from.length) return this.log(way < 0 ? "nothing to undo" : "nothing to redo");
     to.push(HISTORY.now);
     HISTORY.now = from.pop();
-    const keep = Object.fromEntries(Object.entries(this.S).filter(([key]) => key === "t" || key.startsWith("ui_")));
+    const keep = Object.fromEntries(Object.entries(this.S).filter(([key]) => key === "t" || key === "guides" || key === "c_backdrop" || key.startsWith("ui_") || key.startsWith("gd_") || key.startsWith("sh_")));
     this.S = G.fresh_settings({ ...JSON.parse(HISTORY.now), ...keep });
     this.S.ui_ring = clamp(this.S.ui_ring, 0, this.S.rings.length - 1);
     this.static_dirty = true;
@@ -5354,6 +5374,12 @@ class DialTool {
       if (this.closed) return;
       this.take_step();
       try { localStorage.setItem(LAST, JSON.stringify(this.S)); } catch (e) { /* private window: nothing kept */ }
+      try {
+        const viz = {};
+        for (const k of ["guides", "c_backdrop"]) if (k in this.S) viz[k] = this.S[k];
+        for (const k of Object.keys(this.S)) if (k.startsWith("gd_") || k.startsWith("sh_")) viz[k] = this.S[k];
+        localStorage.setItem("dial-tool-visualizer", JSON.stringify(viz));
+      } catch (e) {}
       try { history.replaceState(null, "", await this.show_link()); } catch (e) { /* the address stays as it was */ }
     }, 400);
   }
@@ -5391,6 +5417,10 @@ export async function open_window(pathkit, harfbuzz, font_bytes) {
   let settings = linked?.settings ?? (linked?.old !== undefined ? structuredClone(OPENER) : null);      // (a link of an older scheme: the First dial, R31)
   if (!settings) { try { settings = JSON.parse(localStorage.getItem(LAST)); } catch (e) { settings = null; } }   // …then the last session…
   if (!settings) settings = structuredClone(OPENER);      // …then the opener: the guide's First dial (opener.js; 16 Oct 2026)
+  try {
+    const saved_viz = JSON.parse(localStorage.getItem("dial-tool-visualizer"));
+    if (saved_viz && typeof saved_viz === "object") settings = { ...settings, ...saved_viz };
+  } catch (e) {}
   tool = new DialTool(settings);
   const opened = (link) => {
     if (link.settings) { tool.log("opened the dial in the address"); return; }
