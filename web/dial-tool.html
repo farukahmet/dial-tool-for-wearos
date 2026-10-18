@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Dial Tool</title>
-<!-- Dial Tool, web version · beta 4.46.5 · built 2026-10-17 · source: github.com/duztman/dial-tool, web/src
+<!-- Dial Tool, web version · beta 4.46.5 · built 2026-10-18 · source: github.com/duztman/dial-tool, web/src
      One file: code, shape engine (PathKit), text engine (HarfBuzz), the stand-in font (Inter, OFL), the pixel font (Silkscreen, OFL), the time's face (Barlow Condensed, OFL) and the unit box's (JetBrains Mono, OFL) are all inside. -->
 <style>
 /* Dial Tool, web version — the stylesheet (R32).
@@ -1115,11 +1115,12 @@
   .shadows .guidesmore svg { rotate: 180deg; }
   .shadows .guidesmore[aria-expanded="true"] svg { rotate: 0deg; }
   .bezels { position: relative; display: flex; }
-  .bezels .bezelbox { border-radius: var(--round-switch) 0 0 var(--round-switch); }
-  .bezels .bezelbox[aria-pressed="true"]::before { border-radius: calc(var(--round-switch) - 2 * var(--hair)) 0 0 calc(var(--round-switch) - 2 * var(--hair)); }
+  .bezels .bezelmore { width: var(--control-large); border-radius: var(--round-switch) 0 0 var(--round-switch); border-right: 0; background: var(--canvas-fill); }
+  .bezels .bezelmore svg { rotate: 180deg; }
+  .bezels .bezelmore[aria-expanded="true"] svg { rotate: 0deg; }
+  .bezels .bezelbox { border-radius: 0 var(--round-switch) var(--round-switch) 0; background: var(--canvas-fill); }
+  .bezels .bezelbox[aria-pressed="true"]::before { border-radius: 0 calc(var(--round-switch) - 2 * var(--hair)) calc(var(--round-switch) - 2 * var(--hair)) 0; }
   .bezels .bezelbox[aria-pressed="true"] svg { clip-path: inset(var(--hair)); }
-  .bezels .guidesmore svg { rotate: 180deg; }
-  .bezels .guidesmore[aria-expanded="true"] svg { rotate: 0deg; }
   .bezelmenu { position: absolute; bottom: calc(100% + var(--unit)); right: 0; min-width: 164px; padding: var(--u1); display: flex; flex-direction: column; gap: 2px; z-index: 5; }
   .bezelmenu[hidden] { display: none; }
   .bezelmenu button { display: flex; align-items: center; justify-content: space-between; gap: var(--u4); height: var(--control); padding: 0 var(--u3); border-radius: var(--round-small); color: var(--ink); white-space: nowrap; text-align: left; }
@@ -11346,7 +11347,7 @@ var DialTool = class _DialTool {
     this.bezel_button = bezel;
     const bezel_menu = el("div", { className: "bezelmenu night", id: "bezel-menu", hidden: true });
     bezel_menu.setAttribute("role", "menu");
-    const bezel_more = el("button", { type: "button", className: "onview guidesmore bezelmore", id: "bezel-more", title: "Choose watch bezel", ariaLabel: "Choose watch bezel" });
+    const bezel_more = el("button", { type: "button", className: "onview bezelmore", id: "bezel-more", title: "Choose watch bezel", ariaLabel: "Choose watch bezel" });
     bezel_more.innerHTML = icon(SIGNS.down);
     bezel_more.setAttribute("aria-expanded", "false");
     const bezel_open = (on) => {
@@ -11374,7 +11375,7 @@ var DialTool = class _DialTool {
       bezel_menu.append(b);
       return b;
     });
-    const bezels_wrap = el("div", { className: "bezels" }, bezel, bezel_more, bezel_menu);
+    const bezels_wrap = el("div", { className: "bezels" }, bezel_more, bezel, bezel_menu);
     bezels_wrap.onkeydown = (e) => {
       if (e.key === "Escape" && !bezel_menu.hidden) {
         bezel_open(false);
@@ -14852,9 +14853,9 @@ var DialTool = class _DialTool {
     const batons = [30, 90, 150, 210, 270, 330].map(
       (deg) => `<rect x="-0.021" y="-1.316" width="0.042" height="0.188" rx="0.005" transform="rotate(${deg})"/>`
     ).join("");
-    const dotMinutes = [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19];
+    const dotMinutes = [1, 2, 3, 4, 6, 7, 8, 12, 13, 14, 16, 17, 18];
     const dots = dotMinutes.map(
-      (m) => `<circle cx="0" cy="-1.222" r="0.019" transform="rotate(${m * 6})"/>`
+      (m) => `<circle cx="0" cy="-1.138" r="0.019" transform="rotate(${m * 6})"/>`
     ).join("");
     const DIGITS = {
       0: "M -0.026 -0.084 H 0.026 A 0.038 0.038 0 0 1 0.064 -0.046 V 0.046 A 0.038 0.038 0 0 1 0.026 0.084 H -0.026 A 0.038 0.038 0 0 1 -0.064 0.046 V -0.046 A 0.038 0.038 0 0 1 -0.026 -0.084 Z M -0.016 -0.050 A 0.014 0.014 0 0 0 -0.030 -0.036 V 0.036 A 0.014 0.014 0 0 0 -0.016 0.050 H 0.016 A 0.014 0.014 0 0 0 0.030 0.036 V -0.036 A 0.014 0.014 0 0 0 0.016 -0.050 Z",

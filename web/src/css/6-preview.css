@@ -65,11 +65,12 @@
   .shadows .guidesmore svg { rotate: 180deg; }
   .shadows .guidesmore[aria-expanded="true"] svg { rotate: 0deg; }
   .bezels { position: relative; display: flex; }
-  .bezels .bezelbox { border-radius: var(--round-switch) 0 0 var(--round-switch); }
-  .bezels .bezelbox[aria-pressed="true"]::before { border-radius: calc(var(--round-switch) - 2 * var(--hair)) 0 0 calc(var(--round-switch) - 2 * var(--hair)); }
+  .bezels .bezelmore { width: var(--control-large); border-radius: var(--round-switch) 0 0 var(--round-switch); border-right: 0; background: var(--canvas-fill); }
+  .bezels .bezelmore svg { rotate: 180deg; }
+  .bezels .bezelmore[aria-expanded="true"] svg { rotate: 0deg; }
+  .bezels .bezelbox { border-radius: 0 var(--round-switch) var(--round-switch) 0; background: var(--canvas-fill); }
+  .bezels .bezelbox[aria-pressed="true"]::before { border-radius: 0 calc(var(--round-switch) - 2 * var(--hair)) calc(var(--round-switch) - 2 * var(--hair)) 0; }
   .bezels .bezelbox[aria-pressed="true"] svg { clip-path: inset(var(--hair)); }
-  .bezels .guidesmore svg { rotate: 180deg; }
-  .bezels .guidesmore[aria-expanded="true"] svg { rotate: 0deg; }
   .bezelmenu { position: absolute; bottom: calc(100% + var(--unit)); right: 0; min-width: 164px; padding: var(--u1); display: flex; flex-direction: column; gap: 2px; z-index: 5; }
   .bezelmenu[hidden] { display: none; }
   .bezelmenu button { display: flex; align-items: center; justify-content: space-between; gap: var(--u4); height: var(--control); padding: 0 var(--u3); border-radius: var(--round-small); color: var(--ink); white-space: nowrap; text-align: left; }

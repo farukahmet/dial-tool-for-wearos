@@ -1453,7 +1453,7 @@ class DialTool {
     this.bezel_button = bezel;
     const bezel_menu = el("div", { className: "bezelmenu night", id: "bezel-menu", hidden: true });
     bezel_menu.setAttribute("role", "menu");
-    const bezel_more = el("button", { type: "button", className: "onview guidesmore bezelmore", id: "bezel-more", title: "Choose watch bezel", ariaLabel: "Choose watch bezel" });
+    const bezel_more = el("button", { type: "button", className: "onview bezelmore", id: "bezel-more", title: "Choose watch bezel", ariaLabel: "Choose watch bezel" });
     bezel_more.innerHTML = icon(SIGNS.down);
     bezel_more.setAttribute("aria-expanded", "false");
     const bezel_open = (on) => { bezel_menu.hidden = !on; bezel_more.setAttribute("aria-expanded", String(on)); };
@@ -1478,7 +1478,7 @@ class DialTool {
       bezel_menu.append(b);
       return b;
     });
-    const bezels_wrap = el("div", { className: "bezels" }, bezel, bezel_more, bezel_menu);
+    const bezels_wrap = el("div", { className: "bezels" }, bezel_more, bezel, bezel_menu);
     bezels_wrap.onkeydown = (e) => { if (e.key === "Escape" && !bezel_menu.hidden) { bezel_open(false); bezel_more.focus(); } };
     this.eye_box = el("div", { className: "eyes" }, bezels_wrap, this.iris_box, eye);
     // the showcase's Now: a pill at the bottom centre, on the iris's line (04:26: "a button appeared bottom center:
@@ -4244,7 +4244,7 @@ class DialTool {
       const y = (-0.126 + i * 0.021).toFixed(4);
       const yHi = (-0.126 + i * 0.021 + 0.006).toFixed(4);
       return `<line x1="1.180" y1="${y}" x2="1.268" y2="${y}" stroke="#0c0d0f" stroke-width="0.009" stroke-linecap="round"/>` +
-             `<line x1="1.182" y1="${yHi}" x2="1.266" y2="${yHi}" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/>`;
+        `<line x1="1.182" y1="${yHi}" x2="1.266" y2="${yHi}" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/>`;
     }).join("");
 
     back.innerHTML = `
@@ -4423,7 +4423,7 @@ class DialTool {
       const y = (-0.196 + i * 0.028).toFixed(4);
       const yHi = (-0.196 + i * 0.028 + 0.008).toFixed(4);
       return `<line x1="1.365" y1="${y}" x2="1.565" y2="${y}" stroke="#2b3036" stroke-width="0.011" stroke-linecap="round"/>` +
-             `<line x1="1.368" y1="${yHi}" x2="1.562" y2="${yHi}" stroke="#ffffff" stroke-opacity="0.78" stroke-width="0.005" stroke-linecap="round"/>`;
+        `<line x1="1.368" y1="${yHi}" x2="1.562" y2="${yHi}" stroke="#ffffff" stroke-opacity="0.78" stroke-width="0.005" stroke-linecap="round"/>`;
     }).join("");
 
     const back = svg_el("g");
@@ -4466,9 +4466,9 @@ class DialTool {
     const batons = [30, 90, 150, 210, 270, 330].map((deg) =>
       `<rect x="-0.021" y="-1.316" width="0.042" height="0.188" rx="0.005" transform="rotate(${deg})"/>`
     ).join("");
-    const dotMinutes = [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19];
+    const dotMinutes = [1, 2, 3, 4, 6, 7, 8, 12, 13, 14, 16, 17, 18];
     const dots = dotMinutes.map((m) =>
-      `<circle cx="0" cy="-1.222" r="0.019" transform="rotate(${m * 6})"/>`
+      `<circle cx="0" cy="-1.138" r="0.019" transform="rotate(${m * 6})"/>`
     ).join("");
 
     const DIGITS = {
