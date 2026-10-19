@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-27 -23 54 46" width="54mm" height="46mm">
+<g transform="scale(1 -1)">
+    <g class="pw-case-back" transform="scale(18.000 -18.000)">
+      <defs>
+        <linearGradient id="pw-case-edge" gradientUnits="userSpaceOnUse" x1="-0.25" y1="-1.16" x2="0.25" y2="1.16">
+          <stop offset="0%" stop-color="#dcdddf"/>
+          <stop offset="18%" stop-color="#8a8c90"/>
+          <stop offset="48%" stop-color="#343638"/>
+          <stop offset="78%" stop-color="#828488"/>
+          <stop offset="100%" stop-color="#d4d6d9"/>
+        </linearGradient>
+        <linearGradient id="pw-band-h" gradientUnits="userSpaceOnUse" x1="-0.72" y1="0" x2="0.72" y2="0">
+          <stop offset="0%" stop-color="#353538"/>
+          <stop offset="28%" stop-color="#545456"/>
+          <stop offset="54%" stop-color="#242426"/>
+          <stop offset="82%" stop-color="#18181A"/>
+          <stop offset="100%" stop-color="#0E0E0F"/>
+        </linearGradient>
+        <linearGradient id="pw-band-v-top" gradientUnits="userSpaceOnUse" x1="0" y1="-1.92" x2="0" y2="-0.90">
+          <stop offset="0%" stop-color="#000000" stop-opacity="0.46"/>
+          <stop offset="9%" stop-color="#ffffff" stop-opacity="0.08"/>
+          <stop offset="70%" stop-color="#000000" stop-opacity="0"/>
+          <stop offset="100%" stop-color="#000000" stop-opacity="0.45"/>
+        </linearGradient>
+        <linearGradient id="pw-band-v-bot" gradientUnits="userSpaceOnUse" x1="0" y1="0.90" x2="0" y2="1.92">
+          <stop offset="0%" stop-color="#000000" stop-opacity="0.45"/>
+          <stop offset="30%" stop-color="#000000" stop-opacity="0"/>
+          <stop offset="91%" stop-color="#ffffff" stop-opacity="0.06"/>
+          <stop offset="100%" stop-color="#000000" stop-opacity="0.50"/>
+        </linearGradient>
+        <linearGradient id="pw-crown-grad" gradientUnits="userSpaceOnUse" x1="1.16" y1="-0.16" x2="1.27" y2="0.16">
+          <stop offset="0%" stop-color="#1d1e20"/>
+          <stop offset="20%" stop-color="#76787c"/>
+          <stop offset="42%" stop-color="#2f3134"/>
+          <stop offset="70%" stop-color="#111214"/>
+          <stop offset="88%" stop-color="#4e5054"/>
+          <stop offset="100%" stop-color="#141517"/>
+        </linearGradient>
+      </defs>
+      
+      <path d="M 0.91 -0.70 A 1.166 1.166 0 0 1 1.11 -0.34" fill="none" stroke="#4a4c50" stroke-width="0.034" stroke-linecap="round"/>
+      <path d="M 0.92 -0.69 A 1.172 1.172 0 0 1 1.11 -0.35" fill="none" stroke="rgba(255,255,255,0.52)" stroke-width="0.008" stroke-linecap="round"/>
+      <rect x="1.14" y="-0.055" width="0.04" height="0.11" fill="#141517"/>
+      <rect x="1.170" y="-0.158" width="0.106" height="0.316" rx="0.044" fill="url(#pw-crown-grad)" stroke="#222428" stroke-width="0.005"/>
+      <line x1="1.180" y1="-0.1260" x2="1.268" y2="-0.1260" stroke="#0c0d0f" stroke-width="0.009" stroke-linecap="round"/><line x1="1.182" y1="-0.1200" x2="1.266" y2="-0.1200" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/><line x1="1.180" y1="-0.1050" x2="1.268" y2="-0.1050" stroke="#0c0d0f" stroke-width="0.009" stroke-linecap="round"/><line x1="1.182" y1="-0.0990" x2="1.266" y2="-0.0990" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/><line x1="1.180" y1="-0.0840" x2="1.268" y2="-0.0840" stroke="#0c0d0f" stroke-width="0.009" stroke-linecap="round"/><line x1="1.182" y1="-0.0780" x2="1.266" y2="-0.0780" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/><line x1="1.180" y1="-0.0630" x2="1.268" y2="-0.0630" stroke="#0c0d0f" stroke-width="0.009" stroke-linecap="round"/><line x1="1.182" y1="-0.0570" x2="1.266" y2="-0.0570" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/><line x1="1.180" y1="-0.0420" x2="1.268" y2="-0.0420" stroke="#0c0d0f" stroke-width="0.009" stroke-linecap="round"/><line x1="1.182" y1="-0.0360" x2="1.266" y2="-0.0360" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/><line x1="1.180" y1="-0.0210" x2="1.268" y2="-0.0210" stroke="#0c0d0f" stroke-width="0.009" stroke-linecap="round"/><line x1="1.182" y1="-0.0150" x2="1.266" y2="-0.0150" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/><line x1="1.180" y1="0.0000" x2="1.268" y2="0.0000" stroke="#0c0d0f" stroke-width="0.009" stroke-linecap="round"/><line x1="1.182" y1="0.0060" x2="1.266" y2="0.0060" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/><line x1="1.180" y1="0.0210" x2="1.268" y2="0.0210" stroke="#0c0d0f" stroke-width="0.009" stroke-linecap="round"/><line x1="1.182" y1="0.0270" x2="1.266" y2="0.0270" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/><line x1="1.180" y1="0.0420" x2="1.268" y2="0.0420" stroke="#0c0d0f" stroke-width="0.009" stroke-linecap="round"/><line x1="1.182" y1="0.0480" x2="1.266" y2="0.0480" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/><line x1="1.180" y1="0.0630" x2="1.268" y2="0.0630" stroke="#0c0d0f" stroke-width="0.009" stroke-linecap="round"/><line x1="1.182" y1="0.0690" x2="1.266" y2="0.0690" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/><line x1="1.180" y1="0.0840" x2="1.268" y2="0.0840" stroke="#0c0d0f" stroke-width="0.009" stroke-linecap="round"/><line x1="1.182" y1="0.0900" x2="1.266" y2="0.0900" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/><line x1="1.180" y1="0.1050" x2="1.268" y2="0.1050" stroke="#0c0d0f" stroke-width="0.009" stroke-linecap="round"/><line x1="1.182" y1="0.1110" x2="1.266" y2="0.1110" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/><line x1="1.180" y1="0.1260" x2="1.268" y2="0.1260" stroke="#0c0d0f" stroke-width="0.009" stroke-linecap="round"/><line x1="1.182" y1="0.1320" x2="1.266" y2="0.1320" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/>
+      <circle cx="0" cy="0" r="1.160" fill="url(#pw-case-edge)"/>
+      <circle cx="0" cy="0" r="1.146" fill="#000000"/>
+    </g>
+  <circle r="18" fill="#FCFCFA"/>
+    <g class="pw-case-front" transform="scale(18.000 -18.000)">
+      <defs>
+        <filter id="pw-soft-glow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="0.015"/>
+        </filter>
+        <filter id="pw-rim-blur" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="0.007"/>
+        </filter>
+        <clipPath id="pw-dome-clip"><circle cx="0" cy="0" r="1.156"/></clipPath>
+        <linearGradient id="pw-dome-sheen" gradientUnits="userSpaceOnUse" x1="-0.82" y1="-0.82" x2="-0.22" y2="-0.22">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.56"/>
+          <stop offset="36%" stop-color="#ffffff" stop-opacity="0.32"/>
+          <stop offset="75%" stop-color="#ffffff" stop-opacity="0.14"/>
+          <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04"/>
+        </linearGradient>
+        <linearGradient id="pw-bot-dome" gradientUnits="userSpaceOnUse" x1="0.72" y1="0.82" x2="0.20" y2="0.32">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.42"/>
+          <stop offset="42%" stop-color="#ffffff" stop-opacity="0.22"/>
+          <stop offset="80%" stop-color="#ffffff" stop-opacity="0.08"/>
+          <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="pw-bot-rim" gradientUnits="userSpaceOnUse" x1="0.80" y1="0.78" x2="-0.35" y2="0.98">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.75"/>
+          <stop offset="55%" stop-color="#ffffff" stop-opacity="0.52"/>
+          <stop offset="100%" stop-color="#ffffff" stop-opacity="0.12"/>
+        </linearGradient>
+      </defs>
+      <g clip-path="url(#pw-dome-clip)">
+        <path d="M 0 -1.152 A 1.152 1.152 0 1 1 0 1.152 A 1.152 1.152 0 1 1 0 -1.152 Z M 0 -0.997 A 0.997 0.997 0 1 0 0 0.997 A 0.997 0.997 0 1 0 0 -0.997 Z" fill="#000000" fill-rule="evenodd"/>
+        <path d="M -1.02 0.37 A 1.086 1.086 0 0 1 0.37 -1.02 Q 0.41 -0.95 0.33 -0.89 A 1.40 1.40 0 0 0 -0.89 0.33 Q -0.95 0.41 -1.02 0.37 Z" fill="url(#pw-dome-sheen)" filter="url(#pw-soft-glow)"/>
+        <path d="M -1.04 0.30 A 1.088 1.088 0 0 1 0.30 -1.04 A 1.18 1.18 0 0 0 -1.04 0.30 Z" fill="rgba(255,255,255,0.28)" filter="url(#pw-soft-glow)"/>
+        <path d="M -0.55 0.95 A 1.098 1.098 0 0 0 1.07 0.23 A 1.52 1.52 0 0 1 -0.55 0.95 Z" fill="url(#pw-bot-dome)" filter="url(#pw-soft-glow)"/>
+        <path d="M -0.55 0.95 A 1.098 1.098 0 0 0 1.07 0.23" fill="none" stroke="url(#pw-bot-rim)" stroke-width="0.022" stroke-linecap="round" filter="url(#pw-rim-blur)"/>
+        <circle cx="0" cy="0" r="1.150" fill="none" stroke="url(#pw-case-edge)" stroke-width="0.015" opacity="0.95"/>
+      </g>
+    </g>
+  </g>
+</svg>

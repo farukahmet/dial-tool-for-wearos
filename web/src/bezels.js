@@ -21,7 +21,7 @@
 // the rounded tip on the 6 side; or a three-link bracelet in the case's metal whose ends are finished — the folding
 // clasp at the 6 end, the clasp's tongue at the 12 end — so it reads as one closed loop (01:26).
 
-export const BEZELS = ["None", "Diver", "Pilot", "Dress", "Sport"];
+export const BEZELS = ["None", "Diver", "Pilot", "Dress", "Sport", "Pixel Watch"];
 export const STRAPS = ["None", "Strap", "Bracelet"];
 
 // the tones: steel for all but the dress case, which is gold; a polished part a little lighter; a diver's or sport
@@ -38,6 +38,7 @@ const KINDS = {
   Pilot: { od: 1.14, strap: 0.5, l2l: 1.22, lug: 0.085, flare: 0.2, crown: [0.1, 0.22], onion: true },
   Dress: { od: 1.1, strap: 0.5, l2l: 1.16, lug: 0.065, flare: 0.45, crown: [0.055, 0.12] },
   Sport: { od: 1.3, strap: 0.5, l2l: 1.17, lug: 0.1, flare: 0.2, crown: [0.065, 0.15], pushers: true, tachy: true },
+  "Pixel Watch": { od: 1.31, strap: 0.5, l2l: 1.16, lug: 0.08, flare: 0.1, crown: [0.05, 0.16] },
 };
 
 const f = (v) => (+v).toFixed(3);
@@ -118,6 +119,19 @@ function strap_parts(kind, OD, y0, W, sb, metal, colour, add) {
 export function bezel_parts(i, d, strap = 0, colour = [0.29, 0.2, 0.14, 1]) {
   const R = d / 2, name = BEZELS[i];
   if (!name || name === "None") return { parts: [], reach: R };
+  if (name === "Pixel Watch") {
+    const Rc = R * 1.156;
+    const reach = strap ? R * 1.95 : R * 1.35;
+    const parts = [
+      { d: circle(Rc), fill: "#141517", rule: "nonzero", sw: 1, dash: false, colour: INK },
+    ];
+    if (strap === 1) {
+      parts.push({ d: `M${f(-0.8 * R)} ${f(-1.89 * R)}L${f(0.8 * R)} ${f(-1.89 * R)}L${f(0.8 * R)} ${f(1.89 * R)}L${f(-0.8 * R)} ${f(1.89 * R)}Z`, fill: hex(colour), rule: "nonzero", sw: 0, dash: false, colour: INK });
+    } else if (strap === 2) {
+      parts.push({ d: `M${f(-0.72 * R)} ${f(-1.95 * R)}L${f(0.72 * R)} ${f(-1.95 * R)}L${f(0.72 * R)} ${f(1.95 * R)}L${f(-0.72 * R)} ${f(1.95 * R)}Z`, fill: STEEL.body, rule: "nonzero", sw: 0, dash: false, colour: INK });
+    }
+    return { parts, reach };
+  }
   const K = KINDS[name], T = name === "Dress" ? GOLD : STEEL;
   const OD = d * K.od, Rc = OD / 2, W = OD * K.strap, lw = OD * K.lug, tip = OD * K.l2l / 2;
   const parts = [], add = (path, fill, pen = null, rule = "nonzero") => parts.push({ d: path, fill, rule, sw: pen ? pen.sw : 0, dash: Boolean(pen && pen.dash), colour: pen && pen.colour || INK });
@@ -190,9 +204,159 @@ export function bezel_parts(i, d, strap = 0, colour = [0.29, 0.2, 0.14, 1]) {
   return { parts, reach };
 }
 
+function pixel_watch_back_svg(d, strap, colour) {
+  const R = d / 2;
+  const c = colour || [0.14, 0.14, 0.15, 1];
+  const bandBase = hex(c);
+  const bandLight = hex(mix(c, 1, 0.22));
+  const bandMid = hex(mix(c, 1, 0.08));
+  const bandDark = hex(mix(c, 0, 0.32));
+  const bandDeep = hex(mix(c, 0, 0.60));
+
+  const topBandD = "M -0.80 -0.84 C -0.63 -1.10 -0.56 -1.36 -0.54 -1.73 Q -0.53 -1.87 -0.39 -1.89 Q 0 -1.93 0.39 -1.89 Q 0.53 -1.87 0.54 -1.73 C 0.56 -1.36 0.63 -1.10 0.80 -0.84 Z";
+  const botBandD = "M -0.80 0.84 C -0.63 1.10 -0.56 1.36 -0.54 1.73 Q -0.53 1.87 -0.39 1.89 Q 0 1.93 0.39 1.89 Q 0.53 1.87 0.54 1.73 C 0.56 1.36 0.63 1.10 0.80 0.84 Z";
+
+  const crownRibs = Array.from({ length: 13 }, (_, idx) => {
+    const y = (-0.126 + idx * 0.021).toFixed(4);
+    const yHi = (-0.126 + idx * 0.021 + 0.006).toFixed(4);
+    return `<line x1="1.180" y1="${y}" x2="1.268" y2="${y}" stroke="#0c0d0f" stroke-width="0.009" stroke-linecap="round"/>` +
+           `<line x1="1.182" y1="${yHi}" x2="1.266" y2="${yHi}" stroke="rgba(255,255,255,0.34)" stroke-width="0.004" stroke-linecap="round"/>`;
+  }).join("");
+
+  let strapContent = "";
+  if (strap === 1) {
+    strapContent = `
+      <path d="${topBandD}" fill="url(#pw-band-h)"/>
+      <path d="${topBandD}" fill="url(#pw-band-v-top)"/>
+      <path d="${botBandD}" fill="url(#pw-band-h)"/>
+      <path d="${botBandD}" fill="url(#pw-band-v-bot)"/>
+    `;
+  } else if (strap === 2) {
+    const rows = [];
+    for (let y = 0.84; y < 1.85; y += 0.11) {
+      const ya = y.toFixed(3), yb = (y + 0.10).toFixed(3);
+      rows.push(`<path d="M -0.70 ${ya} L 0.70 ${ya} L 0.68 ${yb} L -0.68 ${yb} Z" fill="#C9C9C4" stroke="#1C1C1C" stroke-width="0.006"/>`);
+      rows.push(`<path d="M -0.24 ${ya} L 0.24 ${ya} L 0.24 ${yb} L -0.24 ${yb} Z" fill="#E2E2DD" stroke="#1C1C1C" stroke-width="0.006"/>`);
+    }
+    for (let y = -0.84; y > -1.85; y -= 0.11) {
+      const ya = y.toFixed(3), yb = (y - 0.10).toFixed(3);
+      rows.push(`<path d="M -0.70 ${ya} L 0.70 ${ya} L 0.68 ${yb} L -0.68 ${yb} Z" fill="#C9C9C4" stroke="#1C1C1C" stroke-width="0.006"/>`);
+      rows.push(`<path d="M -0.24 ${ya} L 0.24 ${ya} L 0.24 ${yb} L -0.24 ${yb} Z" fill="#E2E2DD" stroke="#1C1C1C" stroke-width="0.006"/>`);
+    }
+    strapContent = rows.join("");
+  }
+
+  return `
+    <g class="pw-case-back" transform="scale(${f(R)} ${f(-R)})">
+      <defs>
+        <linearGradient id="pw-case-edge" gradientUnits="userSpaceOnUse" x1="-0.25" y1="-1.16" x2="0.25" y2="1.16">
+          <stop offset="0%" stop-color="#dcdddf"/>
+          <stop offset="18%" stop-color="#8a8c90"/>
+          <stop offset="48%" stop-color="#343638"/>
+          <stop offset="78%" stop-color="#828488"/>
+          <stop offset="100%" stop-color="#d4d6d9"/>
+        </linearGradient>
+        <linearGradient id="pw-band-h" gradientUnits="userSpaceOnUse" x1="-0.72" y1="0" x2="0.72" y2="0">
+          <stop offset="0%" stop-color="${bandMid}"/>
+          <stop offset="28%" stop-color="${bandLight}"/>
+          <stop offset="54%" stop-color="${bandBase}"/>
+          <stop offset="82%" stop-color="${bandDark}"/>
+          <stop offset="100%" stop-color="${bandDeep}"/>
+        </linearGradient>
+        <linearGradient id="pw-band-v-top" gradientUnits="userSpaceOnUse" x1="0" y1="-1.92" x2="0" y2="-0.90">
+          <stop offset="0%" stop-color="#000000" stop-opacity="0.46"/>
+          <stop offset="9%" stop-color="#ffffff" stop-opacity="0.08"/>
+          <stop offset="70%" stop-color="#000000" stop-opacity="0"/>
+          <stop offset="100%" stop-color="#000000" stop-opacity="0.45"/>
+        </linearGradient>
+        <linearGradient id="pw-band-v-bot" gradientUnits="userSpaceOnUse" x1="0" y1="0.90" x2="0" y2="1.92">
+          <stop offset="0%" stop-color="#000000" stop-opacity="0.45"/>
+          <stop offset="30%" stop-color="#000000" stop-opacity="0"/>
+          <stop offset="91%" stop-color="#ffffff" stop-opacity="0.06"/>
+          <stop offset="100%" stop-color="#000000" stop-opacity="0.50"/>
+        </linearGradient>
+        <linearGradient id="pw-crown-grad" gradientUnits="userSpaceOnUse" x1="1.16" y1="-0.16" x2="1.27" y2="0.16">
+          <stop offset="0%" stop-color="#1d1e20"/>
+          <stop offset="20%" stop-color="#76787c"/>
+          <stop offset="42%" stop-color="#2f3134"/>
+          <stop offset="70%" stop-color="#111214"/>
+          <stop offset="88%" stop-color="#4e5054"/>
+          <stop offset="100%" stop-color="#141517"/>
+        </linearGradient>
+      </defs>
+      ${strapContent}
+      <path d="M 0.91 -0.70 A 1.166 1.166 0 0 1 1.11 -0.34" fill="none" stroke="#4a4c50" stroke-width="0.034" stroke-linecap="round"/>
+      <path d="M 0.92 -0.69 A 1.172 1.172 0 0 1 1.11 -0.35" fill="none" stroke="rgba(255,255,255,0.52)" stroke-width="0.008" stroke-linecap="round"/>
+      <rect x="1.14" y="-0.055" width="0.04" height="0.11" fill="#141517"/>
+      <rect x="1.170" y="-0.158" width="0.106" height="0.316" rx="0.044" fill="url(#pw-crown-grad)" stroke="#222428" stroke-width="0.005"/>
+      ${crownRibs}
+      <circle cx="0" cy="0" r="1.160" fill="url(#pw-case-edge)"/>
+      <circle cx="0" cy="0" r="1.146" fill="#000000"/>
+    </g>
+  `;
+}
+
+function pixel_watch_front_svg(d) {
+  const R = d / 2;
+  const bezelRingD = "M 0 -1.152 A 1.152 1.152 0 1 1 0 1.152 A 1.152 1.152 0 1 1 0 -1.152 Z M 0 -0.997 A 0.997 0.997 0 1 0 0 0.997 A 0.997 0.997 0 1 0 0 -0.997 Z";
+  const topLeftDomeD = "M -1.02 0.37 A 1.086 1.086 0 0 1 0.37 -1.02 Q 0.41 -0.95 0.33 -0.89 A 1.40 1.40 0 0 0 -0.89 0.33 Q -0.95 0.41 -1.02 0.37 Z";
+  const topLeftRimD = "M -1.04 0.30 A 1.088 1.088 0 0 1 0.30 -1.04 A 1.18 1.18 0 0 0 -1.04 0.30 Z";
+  const botRightDomeD = "M -0.55 0.95 A 1.098 1.098 0 0 0 1.07 0.23 A 1.52 1.52 0 0 1 -0.55 0.95 Z";
+  const botRightRimD = "M -0.55 0.95 A 1.098 1.098 0 0 0 1.07 0.23";
+
+  return `
+    <g class="pw-case-front" transform="scale(${f(R)} ${f(-R)})">
+      <defs>
+        <filter id="pw-soft-glow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="0.015"/>
+        </filter>
+        <filter id="pw-rim-blur" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="0.007"/>
+        </filter>
+        <clipPath id="pw-dome-clip"><circle cx="0" cy="0" r="1.156"/></clipPath>
+        <linearGradient id="pw-dome-sheen" gradientUnits="userSpaceOnUse" x1="-0.82" y1="-0.82" x2="-0.22" y2="-0.22">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.56"/>
+          <stop offset="36%" stop-color="#ffffff" stop-opacity="0.32"/>
+          <stop offset="75%" stop-color="#ffffff" stop-opacity="0.14"/>
+          <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04"/>
+        </linearGradient>
+        <linearGradient id="pw-bot-dome" gradientUnits="userSpaceOnUse" x1="0.72" y1="0.82" x2="0.20" y2="0.32">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.42"/>
+          <stop offset="42%" stop-color="#ffffff" stop-opacity="0.22"/>
+          <stop offset="80%" stop-color="#ffffff" stop-opacity="0.08"/>
+          <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="pw-bot-rim" gradientUnits="userSpaceOnUse" x1="0.80" y1="0.78" x2="-0.35" y2="0.98">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.75"/>
+          <stop offset="55%" stop-color="#ffffff" stop-opacity="0.52"/>
+          <stop offset="100%" stop-color="#ffffff" stop-opacity="0.12"/>
+        </linearGradient>
+      </defs>
+      <g clip-path="url(#pw-dome-clip)">
+        <path d="${bezelRingD}" fill="#000000" fill-rule="evenodd"/>
+        <path d="${topLeftDomeD}" fill="url(#pw-dome-sheen)" filter="url(#pw-soft-glow)"/>
+        <path d="${topLeftRimD}" fill="rgba(255,255,255,0.28)" filter="url(#pw-soft-glow)"/>
+        <path d="${botRightDomeD}" fill="url(#pw-bot-dome)" filter="url(#pw-soft-glow)"/>
+        <path d="${botRightRimD}" fill="none" stroke="url(#pw-bot-rim)" stroke-width="0.022" stroke-linecap="round" filter="url(#pw-rim-blur)"/>
+        <circle cx="0" cy="0" r="1.150" fill="none" stroke="url(#pw-case-edge)" stroke-width="0.015" opacity="0.95"/>
+      </g>
+    </g>
+  `;
+}
+
 /** a case (and its strap) as SVG markup in the dial's space; its lines a pen's, the same width at every zoom. */
 export function bezel_svg(i, d, strap = 0, colour) {
+  const name = BEZELS[i];
+  if (name === "Pixel Watch") return pixel_watch_back_svg(d, strap, colour);
   const dash = [4, 3];      // a pen's dashes: screen points, as the lines' widths (a non-scaling stroke dashes in the screen's space)
   return bezel_parts(i, d, strap, colour).parts.map((p) => `<path d="${p.d}" fill="${p.fill}"${p.rule === "evenodd" ? ' fill-rule="evenodd"' : ""}`
     + (p.sw ? ` stroke="${p.colour}" stroke-width="${p.sw}" vector-effect="non-scaling-stroke" stroke-linejoin="round"${p.dash ? ` stroke-dasharray="${dash.join(" ")}"` : ""}` : "") + "/>").join("");
 }
+
+/** the front glass overlay (e.g. Pixel Watch dome reflections and bezel ring), over the dial. */
+export function bezel_front_svg(i, d) {
+  const name = BEZELS[i];
+  if (name === "Pixel Watch") return pixel_watch_front_svg(d);
+  return "";
+}
+

@@ -8,7 +8,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { BEZELS, STRAPS, bezel_parts, bezel_svg } from "./src/bezels.js";
+import { BEZELS, STRAPS, bezel_parts, bezel_svg, bezel_front_svg } from "./src/bezels.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(here, "cases/svg");
@@ -26,8 +26,8 @@ for (let b = 1; b < BEZELS.length; b++) for (let s = 0; s < STRAPS.length; s++) 
   // bezels.js draws y up (R2); an SVG's y goes down, so the drawing is flipped once, as app.js does on the preview.
   // The dial's disc is filled in the tool's paper, as the dial covers it on the preview
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}" ${size}>\n`
-    + `<g transform="scale(1 -1)">${bezel_svg(b, DIAL, s)}<circle r="${DIAL / 2}" fill="#FCFCFA"/></g>\n</svg>\n`;
-  const name = BEZELS[b].toLowerCase() + (s ? "-" + STRAPS[s].toLowerCase() : "") + ".svg";
+    + `<g transform="scale(1 -1)">${bezel_svg(b, DIAL, s)}<circle r="${DIAL / 2}" fill="#FCFCFA"/>${bezel_front_svg(b, DIAL)}</g>\n</svg>\n`;
+  const name = BEZELS[b].toLowerCase().replace(/\s+/g, "-") + (s ? "-" + STRAPS[s].toLowerCase() : "") + ".svg";
   fs.writeFileSync(path.join(OUT, name), svg);
   written.push(name);
 }

@@ -8,7 +8,7 @@
 
 import * as G from "./geometry.js";
 import { svg_document, pdf_document, png_with_dpi, file_name, pdf_sheet, sheet_layout, PAPERS } from "./output.js";
-import { BEZELS, STRAPS, bezel_svg } from "./bezels.js";
+import { BEZELS, STRAPS, bezel_svg, bezel_front_svg } from "./bezels.js";
 // a Wear OS watch face (4.67; farukahmet's PR #1, 18 Oct 2026): the dial as Watch Face Format, packed and signed in the browser
 import { generate_watchface_xml } from "./wearos/wff_xml.js";
 import { svg_dial_face, svg_hand, svg_cap, svg_preview, svg_window_sheet, svg_to_png_bytes } from "./wearos/wff_assets.js";
@@ -1221,7 +1221,10 @@ class DialTool {
     this.bezel_g = svg_el("g");                    // a case round the dial, preview only (4.66, bezels.js), under it
     this.bezel_g.setAttribute("class", "bezel");
     this.bezel_g.setAttribute("pointer-events", "none");
-    this.svg.append(sky_defs, this.backdrop, this.sky, this.pool, this.bezel_g, this.dial, this.over, this.handles);
+    this.bezel_front_g = svg_el("g");              // front glass / reflections (e.g. Pixel Watch), over the dial
+    this.bezel_front_g.setAttribute("class", "bezel-front");
+    this.bezel_front_g.setAttribute("pointer-events", "none");
+    this.svg.append(sky_defs, this.backdrop, this.sky, this.pool, this.bezel_g, this.dial, this.bezel_front_g, this.over, this.handles);
     this.tip = el("div", { className: "tip", hidden: true }, el("span"));       // the name of what the pointer is on
     this.tip.insertAdjacentHTML("beforeend", '<svg viewBox="0 0 20 10" width="20" height="10" aria-hidden="true"><path class="a" d="M0 0 L10 10 L20 0"/><path class="b" d="M0 0 L10 10 L20 0"/><path class="c" d="M-1 -3 L21 -3 L21 0 L10 9 L-1 0 Z"/></svg>');
     this.preview_events();
@@ -2058,6 +2061,9 @@ class DialTool {
     if (key === this.bezel_key) return;
     this.bezel_key = key;
     this.bezel_g.innerHTML = S.bezel ? bezel_svg(S.bezel, S.dial_d, S.strap, S.c_strap) : "";
+    if (this.bezel_front_g) {
+      this.bezel_front_g.innerHTML = S.bezel ? bezel_front_svg(S.bezel, S.dial_d) : "";
+    }
   }
 
   /** the case's switch, beside Backdrop (4.66): its kind's name and a chevron; the system's list over it, unseen. */
@@ -5385,6 +5391,7 @@ class DialTool {
     this.over.setAttribute("transform", where);
     if (this.handles) { this.handles.setAttribute("transform", where); this.handles_key = ""; }
     if (this.bezel_g) this.bezel_g.setAttribute("transform", where);
+    if (this.bezel_front_g) this.bezel_front_g.setAttribute("transform", where);
     if (this.pool) this.pool.setAttribute("transform", where);
   }
 
