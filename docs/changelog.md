@@ -1,5 +1,504 @@
 # Dial Tool — changelog
 
+## beta 4.89 (web version) · 19 Oct 2026
+
+Okay's *Notes 3* (nine screenshots in his notes doc) and his notes through the session's sketch rounds, the first session on the sketch loop (handoff §4b): built round by round on a private preview page, released once.
+
+- **R16 widened: a pane whose rows all don't apply goes**, heading and all ("We don't need to see a header we do not have the interaction with"); Undo and Redo the one kind that shows inactive. A window that is off leaves its tab empty under Show.
+- **R34, no band-aids**: one need, one mechanism; a rule for what has none; a contradicted rule edited in the same push.
+- **A tick says its name; its meaning a note under it, in one box** (design canon §6): *Big date*, *Follows the date*, *Neighbours*, *Inside the case* with their notes; every note 12 px and grey, no line between it and its row, its first line a line's spacing under the row's words (`--leading`), the box ending `--note-air` under it. Every tick and note on the controls' column, the first in a pane too (Print's *Mono print mask*). The gap from a box to its words one token (`--tick-gap`, 11).
+- **A row of tile buttons** (design canon §6): on the controls' column beside its name, four to a line and equal; two or three keep a four's size; a fifth squeezes in. A window's four complications so.
+- **A window's tab**: the three ticks at the end of Shape, Frame and Clearance in their place; the text and its font a *Font* pane of their own; *Frame width* for the frame's number; *Follows the date* on to start and for every link (Okay: "yes"); Show's tick closer to its word (8.25), the heading a unit under Show.
+- **Resize Ring from …**: the pane's heading, *from* in plain type and the menu stretched to the margin; Baseline and Ascender retired from the menu and the drawing (a ring stored with one measures to the centre).
+- **Positions' circle** from the first row's line to a unit above the pane's foot, growing left into the eye's column, never past the controls' names; its lines 1.75 (a hairline + 0.75).
+- **The bar's date popup**: one line — the weekday, day · month · year as menus, − and + together — no time line, 15 % larger, the same size whatever the date. **NOW** outlined as the bar's other boxes, no grey fill.
+- **The hand's picture**: no squares and no dotted box; pointing at a side, or its row, lights that side as a line on the outline in the guide's colour; the sides' reach unseen, the cursor saying the way.
+- **A phone's sheets** (colour, fonts, Guides, Shadows) 7 px in from the sides and the foot, over the drawer's gripper.
+- `test/crop.mjs`: a picture of one part of the window, with measures (`CROP_W`, `CROP_H`, `CROP_TOUCH`); crops kept in `web/test/crops/`.
+- Build list: Notes 3 as #411–#429; the production debts gathered and ranked (#12, #16, #63, #218–#228); #229 closed (Blank face).
+
+## beta 4.88.2 (web version) · 19 Oct 2026
+
+Okay's notes of 18:00–18:04, the look lane ("These are rules now"; design canon §6, §7).
+
+- **Tick rows**: the box stands on the words' first line, its middle on that line's middle — never between two lines; the words run to two lines at most and the lines balance, so no orphan word (`text-wrap: balance`).
+- **The Show tick** under the window cards and the hand tabs: the white tick fills its black box — the box as it was (9), the tick the box less half a unit (6.25; 3.5 before).
+- **A window's colours one to a line**, as the rings' and hands' are ("List these colors in lines like elsewhere"): Disc under it · Frame · Picture · Shade · Neighbours, each a row with its pill; an am · pm window's say *AM half* and *PM half*. The one-line Colours row and its stylesheet are gone.
+- **Neighbours on to start**, and for every link ("default on, on retroactively for all links"): `neighbours: true` in `WINDOW_BASE`, so a link that doesn't say otherwise draws them; the Gallery's First dial card redrawn. The link scheme stays 3 — Okay's word makes this a retroactive change, not a dial quietly drawn wrong (R31).
+- Build list #408 noted: the font box's colour as a full swatch with its hex, the font name 2 px larger from its baseline and left.
+
+## beta 4.88.1 (web version) · 19 Oct 2026
+
+- **Two sizes of check (R19)**, after Okay's note on the time a push takes ("Each .x step up gets the full check … Only filter makes more sense now … Check smartly"): a small push (the third number) runs what it touches, a step (the second number) and a release run everything. `npm run small`: the labels, the links, the complications, the build, the window test, and the icon check only when an icon could have changed — `icons/changed.mjs` looks at whether the icon block in `app.js` or anything under `icons/` differs from the last commit; nothing changed, nothing runs. The window test's own filter (`--only`) needs its sections made independent first: build list #407, next.
+- The bar's date popup is as wide as its words and centred on the date's box (it was bound to the box's width and spilled).
+- Okay's notes of 17:43 in the build list: #404 dauphine and leaf hubs as on a real movement; #405 a blank SVG template with guides and dots for every place an SVG can go, for when imports are built; #406 moving away from a held slider makes its steps finer, soon.
+
+## beta 4.88 (web version) · 19 Oct 2026
+
+Okay's notes of 17:30 on the am · pm window and X-ray ("All confirmed, go").
+
+- **am · pm is one disc, half am and half pm** (Okay: "Am pm should be one half of a circle each"): a half-round hole over a disc that turns once a day on the hole's flat side — the am half in the disc's colour (the Colours line says *AM*), the pm half in the picture's (*PM*); no sun, moon or stars ("minimalize inside graphics … remove stars from nights"). The Sky and Band pictures are gone, with their colours (Dawn, Dusk, Sun · moon) and Band's now-mark on the frame; no Picture row for an am · pm window. Their places in `PICTURES` stay (R9) but `look` is not read for am · pm. What Okay saw: a Band window (a strip of the day's colours) under which X-ray drew the Sky disc — the two never matched.
+- **Link scheme 3** (R31): a scheme-2 link with Sky or Band would now draw something else, so the number went up; `#2…` links open the First dial with the note. The Gallery's and the examples' links rewritten (`node gallery.mjs`, `node examples.mjs`); the live guide's links die until the guide is rebuilt on Okay's word (R25).
+- **X-ray as a stack** (Okay: "makes the unseen full visible, sensible z height differences (not editable) and a stacking order. Selected shows above all others. Top is 100% opacity, with a white dotted outline, below gets -15 opacity gradually"): the selected window's disc on top, whole, at full strength, its edges dotted in white (1.5 px, preview only); under it the hands, then the face — plate, rings, what the holes show — then the other windows' discs, the biggest deepest, as a movement stacks them; each layer under the top one 15 % fainter than the one above (85 · 70 · 55 …, never under 25). The plate's veil (`XRAY_VEIL`) is gone. The discs' dashed guide edges stay. Never in a file or the Tiny Preview (R5, R26).
+- **Big date is an option of the Date window** (Okay: "Big date function is an under selection of date function"): four complication tiles (date · day · am · pm · moon phase); under Date a tick, *Big date: two holes, the tens and the units each on a disc*, which sets the stored kind to 4 and back (R9: the kind keeps its place; every link draws as before).
+- **The bar's date opens a popup** (Okay: "Date on the black bar is click to edit on popup. Plusminus for both. No controller"): over the date's box, in the bar's tones — the day written out ("Mon 19 Oct 2026") between − and +, a day each; under it the time ("10:09:36 AM") between − and +, an hour each; a press on the day opens the system's date picker as before; Escape or a press elsewhere closes it. In **Dial Pop**, Barlow Regular ("Try barlow not condensed for font"), cut down to its letters and figures by `fonts/ui/pop_font.py` (22 kB) and packed into the page.
+- Build list #399, #400, #402 done; #401 (am · pm's jump) waits on this disc.
+
+## beta 4.87.1 (web version) · 19 Oct 2026
+
+- **The cases and straps as SVG files** (Okay, 17:15: "Can i get the svgs of the straps and cases on my harddisk like the icons?"): `web/cases.mjs` writes `web/cases/svg/` — twelve files, every case kind (Diver, Pilot, Dress, Sport) alone, with a strap and with a bracelet, drawn by `bezels.js` exactly as the preview draws them round a 36 mm dial (the dial's disc filled in paper), in millimetres, each as wide as its case and as tall as its strap. Committed, as `icons/svg/` is. Copied to his Mac, `dial-maker/cases-svg/`.
+
+## beta 4.87 (web version) · 19 Oct 2026
+
+Housekeeping, on Okay's ask ("Housekeeping, audit, system check, all at once … No retired rules up there to see, no forgotten comments within the code"; then: "eliminate history from current docs. All common sense options, go with all"; "in the end i need this all on main and current"). Nothing on the dial or in the look changes: the look-check (`test/same.mjs`, 447 states) shows only the showcase's Now pill mid-transition; `npm test` passes (443 checks). Released to `main` the same day.
+
+- **Code.** `icons/check.mjs` reaches the font sheet again: it pressed `#font-change`, a button gone since 4.54, and noted the sheet "could not be reached" on every run since — 111 icons in 21 states are checked now (108 in 20 before). The Gallery's and the examples' cards are drawn by one `card()` in `web/links.mjs`: the examples' copy of the loop lacked `fill-opacity`, so a see-through fill on an example card drew solid; `src/gallery.js` regenerated (the First dial's card was stale). `output.js` exports its `num` and `rgb`; the Wear OS export imports them instead of its own copies. Out: `show_panel()` (nothing called it) and its `#app.nopanel` rules, `HAND_NAMES`, the three `GUIDE…` colour arrays in `geometry.js` (`GUIDE_COLOURS` replaced them; `GUIDE` also shadowed the guide's URL in `app.js`), `MM_PER_PT` (R1 named it for imports; nothing imports), `svg_dial_plate` and `svg_dial_rings` (superseded by `svg_dial_face`), the unused `DISC_PLACES` import, the `.picks.five` rules (nothing emits `five` since `--across`), seven unused tokens (`--bar-dim`, `--bar-faint`, `--bar-on`, `--bar-edge`, `--bar-hover`, `--half`, `--time-cap`), one dead duplicate `.fontbox .row.num` rule and the dead `42%` rows value in `8-narrow.css`. Sixteen screenshots committed into `web/` in 4.80 and 4.82 (`case-*.png`, `hd-*.png`, `hub-*.png`, `tl-*.png`) deleted. Fourteen spaces written as unit arithmetic (`calc(var(--unit) / 2)`…) now use their `--uN` token; `-2px`, `-3px` and `#000` in rules written as `--thick`, `--triple`, `--black` (R32); `--ring-thick` is `var(--triple)`. esbuild 0.25 → 0.28 (Playwright stays pinned at 1.56: a new Chromium would move the window test's measured values).
+- **Comments.** Every code comment now says what a thing is and why (Okay's words), never what it was until which version: about 50 such notes gone from `app.js`, `geometry.js`, `opener.js`, the `.mjs` tools and the stylesheet. Stale ones fixed: the controller's comment in `1-tokens.css` still described the light head with the name (gone since 4.52); `draw_shadows` still called shadows a trial on a branch; two docstrings named `test/links.mjs` (it is `linktrip.mjs`); `opener.js` pointed "(below)" at the wrong dial; the Tiny Preview's docstring kept "regular eye for now"; `4d-hands.css` described a `.pm` band no rule or element has; a tag's comment described the old name-and-field pop-up; the bar's date comment still said "day, month, year".
+- **Rules.** `docs/rules.md` lists only the web version's rules, in web wording (R2, R6, R10, R19, R28, R30 reworded; R1 without `MM_PER_PT`; R7 with `WINDOW_BASE`, the `gd_` and `sh_` prefixes; R23 marked not built, #50). The DrawBot window's rules — R13, R14, R22, R24, R27 — moved whole to `archive/drawbot/rules-drawbot.md`; numbers are never reused. **R15's form A2 retired**: the code has had no two-to-a-line row since width and height became two full rows with the LINK pill (4.57). The header's 2,500-character edit history is one line.
+- **Docs state the present.** `docs/glossary.md`: every entry rewritten as the thing is now (the chronology inside entries gone — Number form, Controller, Opener, Gallery, Guides, Speed slider…); the DrawBot words (DrawBot, vanilla, DrawView, Canvas, Slot, Preview switch, Frame clock, GridView, Binding, Probe, Harness, Smoke test, the old Guidebook and Classics) and the beta 1.0 retired words moved to `archive/drawbot/glossary-drawbot.md`; entries added for Controller, Quiet row, Chevron box, Blank face; Tag, Classics, Guidebook, Family / style, Web version rewritten. `docs/build-list.md`: open items only — done rows in `docs/build-list-done.md`, the DrawBot items ("Verify on a Mac", the preview plan's #37–#45) in `archive/drawbot/build-list-drawbot.md`; nine rows marked *verify* that the changelog shows built are closed (#49, #57, #64, #67, #74, #78, #94, #95, #170), #54 (MCP) dropped, #293's two contradictory rows about `try/shadows` made one (the branch is gone). `docs/brief.md`: header current (it said 16 Oct with 56 rows since), §5 in numeric order with the settled and the DrawBot-era questions out, §7 and §8 present tense; §4, the dated decision record, kept whole. `CLAUDE.md`, `README.md`, `docs/handoff.md` (§1 rewritten), `docs/design.md` (`tools/make_guide.py` → `guide/look/`), `docs/project-prompt.md` (the block to paste into the Claude Project, whose live instructions still said vanilla/DrawBot/`test_harness.py`), `docs/versions.md` (4.52.1 and 4.52.2 went live inside 4.53's commit, so they have no row of their own — said so) brought current. The rule itself is in CLAUDE.md and handoff §4: docs and comments state the present and the reason; the change goes in this file.
+- **Still open from the audit** (build list #398; Okay's notes of 14:13 are #399–#402; the Playwright bump #403): 34 values off the unit scale in the stylesheet's rules that are not in the specials block (letter-spacings, underline offsets, opacities on the ruler, `.tinyshut`'s 0.15 s, SVG stroke widths, the hover lift's 12 %), one literal negative margin (`.ringlist .grip`, −4 px), the two hard-coded breakpoints (860 / 861 px), five rules that style another part's selector from the wrong file, `--handle` meaning two things (a width token and a JS-set colour), and the round-corner canon ("colour things only") that the signs, tabs and pills don't follow — for the #294 review, with Okay.
+
+## beta 4.86 (web version) · 19 Oct 2026
+
+Okay's notes, 19 Oct, 12:46.
+
+- **The controller's square at 85 %** (70 in 4.85). **Its LINK a disc** as − and + are; linked it reads LINK over +ED (his words). **Height's controller has it too**, not only Width's ("tapping second item in the linkees should also trigger button").
+- **Guides, the case (and its strap) and X-ray down the top right corner**, one column in that order; the Guides list drops from it (it rose from the bottom left, 4.59–4.85). Backdrop over Shadows stay at the bottom left; undo and redo alone at the top left.
+- **X-ray's box**: room after its word, as much as Backdrop's.
+- **A switch that is off** (the case, the strap, X-ray): its outline dotted — shorter dashes, shorter gaps, a denser line (dashed until 4.85).
+- **Signs swapped, places kept**: Tiny Preview's button has the dot (the iris, the showcase's sign until now); the showcase's has the eye — the iris with its lids, and in the showcase the X cut by them, as before.
+
+## beta 4.85 (web version) · 19 Oct 2026
+
+Okay's notes, 19 Oct, 12:30 (on the iPad).
+
+- **The ring of shine: three circles that meet at noon** (#385; his choice of the two readings): three circles round the one centre, 0.3 of the dial's radius apart at dawn and dusk, closing as the sun climbs, one at noon — where their light adds up, so noon is the brightest. Each a soft light band with a dark one either side; their width from 4.83's dawn and noon (0.8 → 0.017 of the radius), now stepping down in ratio so the three stay apart while they close.
+- **The controller**: three quarters of its size everywhere (on a phone only, 4.68–4.84); its square at 70 % (the preview shows through); a pair's **LINK** a button of its own between − and +, in the middle of their line (it used to fall on the square's corner, the row's pill). Its − and + redrawn at the size they now show (33, 6 thick; R33).
+- **On a touch screen, a press on a slider or a name scrubs at once**: the controller comes under the finger and its slider follows the same finger without lifting it — by as much as the finger moves, along the knob's travel. A name still scrolls the panel up and down.
+
+## beta 4.84 (web version) · 19 Oct 2026
+
+Okay's notes, 19 Oct, 12:06.
+
+- **Ticks and notes after a row of controls start on the controls' column**, under them — app-wide ("The drawing of secondary lines after an adjustment, they start on the column aligned with the upper row"): *Turn it with its radius*, *Follows the date in the bar*, a window's neighbours and physics, the moon's age note, and every other tick or note that follows a row in a pane. One that heads a pane's rows keeps the left edge; rows beside a hand's box keep their own columns.
+- **The font box's eye as low as every heading's eye**, the box down with it, their tops level ("general eye top padding is the same as all the rows, the font box moves down with eye"): 12 under the line over the pane, as a heading's eye centred on its 40; in 4.79–4.83 both stood on the line.
+
+## beta 4.83 (web version) · 19 Oct 2026
+
+The ring of shine, after Okay's look at 4.81 (19 Oct, 01:59: "almost perfect, bring in more bands, wider (5x) on dusk and dawn, sharpest (3x) on noon. Smaller shine diameter").
+
+- **Seven bands** in place of three: light in the middle, dark either side, then a fainter light and a fainter dark, each pair 0.55 as strong as the one inside it. Drawn as two radial gradients (the light screened, the dark laid on), so the bands are soft: a wide one blurs, a narrow one is crisp.
+- **Their width**: × 5 at dawn and dusk (0.16 → 0.8 of the dial's radius), ÷ 3 at noon (0.05 → 0.017); between, in step with the sun's height.
+- **The circle 15 % smaller**: 1.275 × the dial's radius (1.5 in 4.81), still crossing the dial at noon a third of the radius above its centre, so its centre comes nearer (0.94 R behind, 1.17 R in 4.81).
+
+## beta 4.82 (web version) · 19 Oct 2026
+
+Okay's notes on 4.81 (19 Oct, 01:40: "Do these and advance").
+
+- **The cases redrawn as technical drawings** (#377, #379; "better proportions … real lug widths etc in relation to the dial size … less illustrationy, more technical drawingy"): seen from above, flat fills, an ink outline round every part (1 screen point at any zoom), finer lines for the edges inside one (a bezel's step, a lug's chamfer, a crown's grooves), the spring bars as dashed hidden lines. Proportions from real cases, as shares of the case's diameter: the strap between the lugs half of it (20 mm on 40), lug tip to lug tip 1.16–1.22 of it, a diver's opening about three quarters. Each kind's own: the diver's guards and turning bezel with its grips, the pilot's onion crown and long lugs, the dress case's slim flaring lugs and narrow gold bezel, the sport case's pushers at 2 and 4. No highlight or shadow bands any more.
+- **Straps**: stitched along both edges (a dashed thread a shade off the leather), the buckle with its tongue and two keepers on the 12 side, the holes and a round tip on the 6 side. **The bracelet's ends are finished** — the folding clasp at 6, the clasp's tongue at 12 — so it reads as one closed loop.
+- **Case and Strap at the top left**, beside undo and redo (in the bottom-left column since 4.79). **The case's sign** redrawn: the lugs now run out of the case (they floated clear of it), a dial opening inside; its box spaced as Guides' — the sign as far in, the chevron in a square of its own behind a line; a sign's 26-point room was leaving 4 empty either side of its 18.
+- **Tiny Preview's eye at the bottom right**, over the dial-alone eye (top right until 4.81). The showcase stays where it is.
+- **The bar's date: day over month**, no year (Okay: "i don't want it there"), 10 on 11 so it stands clear inside its box (three lines of 9 touched its lines).
+
+## beta 4.81 (web version) · 19 Oct 2026
+
+Okay's notes on 4.80 (19 Oct, 01:26), the small ones.
+
+- **The ring of shine redrawn** (#365; "centre is about 6 on noon", "circle extends to be 150% dial size", "horizontally starts from 2/3 way from top of dial on the radius"): a circle 1.5 × the dial's radius, its centre on the side away from the sun — at noon just past 6 — so it crosses the dial a third of the radius above the centre. Unseen at sunrise and sunset, strongest at noon; its bands wide while the sun is low, narrow at noon. A light middle band (screened: it shows on a dark dial) between two dark ones (they show on a light dial).
+- **The selected ring and its line are one box** (#364; "two boxes, yours is not connected, mine is"): no gap between them, one line shared, the corners square where they meet.
+- **None, dotted** (a numerals ring's 12 left empty): the baton's outline as dots, one at each corner and the rest evenly spaced along the sides (2 apart), in place of dashes.
+
+## beta 4.80 (web version) · 19 Oct 2026
+
+Hands that sit on something, and handles that move where a hand is widest (#370, #368; Okay, 19 Oct 2026, 00:59).
+
+- **A hub on each hand** (#370; "these hands need a disc to attach to the mechanism … a ball that the leaf attaches to"): Hands → **Hub Ø**, a round boss at the pivot joined to the hand's shape, solid even on a hollow hand. 0 = none, as every hand before; a disc hand has none. The First dial now opens with hubs: the hour hand's 2.4, the minute's 2.0, each a ring round the one above it, the cap (1.6) on top. New key `hub`.
+- **The side handles on a hand's picture move up and down** (#368; "centre buttons on preview allowed to go up/down to adjust eg where the leaf bulges"): on a leaf, a dauphine, a pencil and a sword they stand where the hand is widest, and a drag along the hand moves that place — a leaf's bulge, a dauphine's corners, the shoulder of a pencil's or sword's point. Across, they set the width as before. The first 4 points of a drag decide which, held to the end.
+- **A leaf's Widest at %** in the rows (20–70; 37.5 is the leaf of every version before). New key `bulge`.
+- The handles' box leaves the hub out, so a hub wider than the hand does not pull the width handles off its edges.
+- Every handle on a hand's picture stood a point down and right of its place since 4.71 (measured from the box, not from the overlay inside its border); now on it.
+
+## beta 4.79 (web version) · 19 Oct 2026
+
+Okay's notes on 4.78 (19 Oct, 00:59 and 01:03), the parts that were clear.
+
+- **The guides' list** (#372): the guides scroll in a box of their own, with a thin scrollbar (and on touch a fade at the bottom while more is below), measured to stand between the top of the window and the Guides button; the settings — Rings · Windows · Add, Thickness, Reset All — sit under it on a lighter ground and never scroll away. The colour dots 7 px (8 before; 11 under a finger), the none sign ⊘ 14 px (it had shrunk with the dots). Headings for Windows and Added name only; their choices moved to the settings.
+- **Bevels on the hands off by default** (#367): Shadows → **Bevels %** (0–100, 0 = flat; 4.77 drew them at full strength whenever shadows were on). New key `sh_bevel`.
+- **The hand's shape named under its picture** (#371): a finger cannot hover the shape tiles to read their names, so the chosen one's name is written under the picture ("Your SVG" for a file).
+- **The orange slivers on a hand's picture** (#369, Claude's reading: the lit part stuck on after a tap): a part lights only while a mouse points at its row; under a finger it goes off when the controller closes or a handle is let go.
+- **LINKED on a big date** (#366): the pair's width and height now keep their ratio too (4.57's link only knew the other shapes).
+- **Case and Strap** (#375) stack in the list at the bottom left with Backdrop and X-ray, each with an icon; on a phone only the icons show (the words come back where the panel shows words).
+- **The font box flush with the eye** (#374): a bare pane's eye stands at the top of the box, not centred on it.
+- A window's **Complication** picker keeps its five kinds on one line (the big date had fallen to a line of its own).
+- **Links' key codes**: 4.72–4.75 added their keys above 4.69's instead of under them, so a link made in 4.69–4.74 with a strap, X-ray, a window's picture or neighbours reads those wrongly in later versions. The 4.75–4.78 order (the live page's, and saved dials') is kept; `test/link-keys.json` now holds the released list and `linktrip.mjs` fails if a key moves.
+
+## beta 4.78 (web version) · 19 Oct 2026
+
+Every mark selectable and editable, mechanism first (#349; Okay's notes 2: "a double click or tap selects the ring, a second what was clicked … a tick can grow or become anything else (an SVG later), a wedge").
+
+- **On the dial**: a first press on a ring chooses the ring (as before); a press on the ring already chosen chooses the numeral or mark pressed, and opens its Nudge pane. Until 4.77 a single press chose a numeral at once, and marks could not be chosen.
+- **Nudge one mark**: the Nudge pane, until now for numerals only, works on every ring but a band — ticks and markers too: Radius ±, Angle ±, Rotate, Size ×, and for a mark a **Shape of its own** (As the ring · Bar · Wedge · Dot). The list names a mark by the time it stands at (6 · 5:00); a dot marks those with nudges; Reset this mark.
+- **The one chosen is outlined on the dial**, dashed in its ring's guide colour on a white line, while the Nudge pane is open on the Rings tab — whether a press or the list chose it.
+- Left for the next steps of #349: a numeral's preview at the left of its controls, an SVG of one's own for a mark.
+
+## beta 4.77 (web version) · 19 Oct 2026
+
+The showcase, a step further, and bevels on the hands (#351, #354; Okay, 19 Oct 2026, 00:29: "1 and 3, go").
+
+- **A dim backdrop still makes a spotlight**: the pool's colour is the backdrop's, lifted toward white until it is at least 20 % light, so a near-black backdrop gives a grey pool instead of none.
+- **A ring of shine** in the showcase: three bands round a centre moved toward the sun (the middle one brightest), screened onto the dial and onto the hands, moving with the sun through its day. On a dark dial it lightens a ring, and the hands' shadows read on it.
+- **The showcase's shadows** are a quarter darker than the Shadows setting.
+- **Bevels on the hands** (#354), wherever shadows are drawn: each hand split along its length, the half the light falls on lighter, the other darker, by as much as the light comes from the side — two tones of the hand's own colour, not facets in 3D. A disc hand stays flat. Preview only (R26).
+
+## beta 4.76 (web version) · 19 Oct 2026
+
+Your own dials (#347; Okay's notes 2: "Instances of a watch: a save instance button; a gallery of them; printable; shown big or at actual size").
+
+- **Export → Gallery → Yours · Save this dial**: the dial as it is now, kept in this browser with a small picture (its scene, as the Gallery's are drawn), named by its size and when. Newest first, sixty at most.
+- Each is a card as the Gallery's: pressed, it comes forward with *Edit this dial*, *In a new tab* and *Remove*. A link or a settings file still takes a dial to another browser — the line under the button says so.
+- Printable and at actual size: open one, then Sheet PDF (4.75) or the Tiny Preview (4.59). A print sheet of several different dials is not built.
+- Stored under `dial-tool-instances`; a full or closed storage (a private window) says so in the log instead of failing.
+
+## beta 4.75 (web version) · 19 Oct 2026
+
+A print sheet (#348; Okay's notes 2: "Printing: print page preparation, preview, copies, stacks — something simple, elegant, efficient and paper savingly"). The first of "other work" after the discs (Okay, 18 Oct, 23:52).
+
+- **Export → Print → Sheet PDF**: one page of copies of the dial at true size — A4, Letter or A5 — packed in straight rows or staggered ones, whichever holds more (circles stack tighter staggered: 45 of a 30 mm dial on an A4 with 3 mm between, against 40), the block centred, 8 mm clear at the paper's edges. Mirrored and as a print mask as the two ticks above say, so a toner-transfer sheet is one click.
+- **Copies** (0 = as many as fit), **Room between** (mm), **A cut line round each** (a hairline ring 0.4 mm outside the dial, filled, R4). A line under Copies says what the page will hold; the page is drawn small beside the button, every copy where it will stand.
+- The dial is drawn once in the file and placed at every copy, so a full sheet stays small (16 KB for 45). Print at 100 %, not "fit to page" — the log says so.
+- New keys `out_paper`, `out_copies`, `out_gap`, `out_cutline`.
+
+## beta 4.74 (web version) · 19 Oct 2026
+
+Date discs (#346; the disc sketches D1 and D2). The last of the twelve.
+
+- **Neighbours** (D1): a date or day window's new tick, *Its neighbours show where the hole allows*. Its disc's places either side of the shown one are drawn where the hole lets them — make the hole tall at 3 or 9, wide at 12 or 6 — cut by its edges, in a *Neighbours* colour of their own (a grey to start). With them showing, the text is sized from the disc's step from one place to the next (no more than the hole's height), so a hole made tall keeps the shown date its size.
+- **Big date** (D2), a fifth complication: two square holes side by side (Width is both together, an eighth of it the gap between), the tens in the left (none before the 10th), the units in the right, each in the window's font. It follows the bar's date or takes typed text, as a date. Its own icon in the Complication row. No X-ray disc for it yet (its two discs, tens and units, are a mechanism of their own).
+- A moon window's Phase now names its disc's colour *Moon*.
+- The Wear OS export carries the pictures' further colours and the neighbours into its window frames, and builds a big date's frames as a date's.
+- New keys `neighbours`, `da_neighbours` (off); the kind *big date* appended to the complications (R9).
+
+## beta 4.73 (web version) · 19 Oct 2026
+
+The moon's and am · pm's pictures (#346; the disc sketches B and C, Okay, 18 Oct 2026, 23:52: "All are good"). B and C in one version: they share their making.
+
+- **A moon window's Picture**: *Arch* (as before) · *Phase* — the moon as it is lit that night (waxing on the right, waning on the left, its terminator half an ellipse), in a round hole: the sky in the picture's colour, the lit moon the disc's, its dark side a *Shade* of its own, two small stars · *Line* — one ink: the moon's outline, its dark side filled, two small crosses for stars (for etching).
+- **An am · pm window's Picture**: *Sky* (as before) · *Half* — a half-round hole, flat side down, over a disc turning on that side once a day: night in the picture's colour, day the disc's, the moon, three stars and the sun in a *Sun · moon* colour of their own · *Band* — the day's colours along a strip, twelve hours across the hole, now at its middle: night (21–5) in the picture's colour, *Dawn* (5–7) and *Dusk* (18–21) their own, day the disc's; a small triangle in the frame's ink over the hole marks now.
+- The Colours line names each colour by what it paints (Sky, Shade; Day, Night, Sun · moon, Dawn, Dusk). X-ray draws a Half's disc whole.
+- New keys `look`, `c2`, `c3` (and `da_look`, `da_c2`, `da_c3`): the picture as before and its own tones to start, so every older link looks as before. Width row for the half-round hole.
+
+## beta 4.72 (web version) · 18 Oct 2026
+
+The windows' discs (#346; Okay, 23:52, on the disc sketches: "All are good but a3 not enough, a2 and others"). Sketches A2, A3 and A4.
+
+- **Each window's disc** is now a shape the tool knows: a date or day window's is a band round the dial's centre, as wide as the hole reaches and 0.3 mm more each side, every place printed on it as the window prints its own (1–31; the seven days in the window's language), each turned to read upright when it comes under the window, the next a step clockwise. An am · pm window's is a small disc turning on the hole's bottom edge, half night, half day. A moon window has none yet: its moon is drawn moving along a path, not carried on a disc.
+- **X-ray** (A2), a switch beside Case while such a window is on: every disc drawn whole under the plate, the plate a veil (82 %). Preview only — never in an export or the Tiny Preview (R26). New key `xray`, off.
+- **The disc's edges as guides** (A3): two dashed circles in the window's guide colour, beside its solid edges and dotted middle, whenever its guides show.
+- **Physics** (A4): a window's new tick, *Its disc stays inside the case* (on). On, a disc that ends past the dial's edge less a 0.5 mm rim turns its outer guide red, and a line under the tick says by how much; off, it may (a face on a screen). New keys `physics`, `da_physics`, on.
+
+## beta 4.71 (web version) · 18 Oct 2026
+
+Handles on the hand's picture (#345; Okay's notes 2: "draggable dots at the extremes of what can be edited, a dotted bounding box like Photoshop's transform; one side's width drag edits the other symmetrically").
+
+- **A dotted box round the hand** in its detail box, and **a square at the middle of each side**, in the selected guide's colour with a white hairline (as the ring handles of 4.65): at the tip, Length; at the other end, Tail; at the two edges, Width — both edges together, so the width grows by twice the travel. A disc hand: Length (its marker's end) and, at the edges, Disc Ø; no tail.
+- Dragged, a handle adds the pointer's travel (in mm at the picture's scale when the drag began) to its number, through the row (undo, the dial, the number box all follow), its part lit (4.70). The picture keeps fitting the hand as it changes, so the whole hand stays in view; a handle drifts a little from the pointer when the hand grows a lot.
+- Each handle's tag says what it sets; a fingertip's reach round each.
+
+## beta 4.70 (web version) · 18 Oct 2026
+
+A hand's number lights its part (#329; Okay's notes 2: "hovering a row lights its part on the hand's picture at the left").
+
+- **Pointing at a hand's number lights the part it makes** on the hand's picture, in the selected guide's colour: Length a band at the tip, Width both edges, Tail its end, Round ends the corners, Hollow wall the hollow, Tip length and Head width their head. It stays lit while the row holds the focus or its controller is open (so on a phone or iPad too).
+- How: the hand is drawn again with that number a little less and a little more (15 % of it), and the part is where those differ from the hand as it is — so it is always true to the shape, whatever the shape. A number at 0 shows where its part would come, at half its range (a counterweight's circle, a wall's hollow).
+
+## beta 4.69 (web version) · 18 Oct 2026
+
+Straps for the cases (Okay, 22:35: "Add straps to bezels metal bands too, same style, style very good. Fit and previews care about the dial still, the bezel and strap secondary. Add strap color change option").
+
+- **A strap or a bracelet** on every case, drawn as the cases are: a leather strap in its colour with a lighter band on its left and a darker one on its right, a keeper past the lugs, holes and a rounded tip at the bottom, a buckle at the top; or a bracelet of three links to a row in the case's own metal (steel, or gold for the dress case), its middle links polished, its gaps in shade. Both run from between the lugs and narrow a fifth.
+- **A Strap switch** beside Case while a case is on: the strap's colour as a chip (a press opens the colour pop-out), then No strap · Strap · Bracelet. New keys `strap` (a strap to start) and `c_strap` (a dark brown).
+- **The view fits the dial again**, never the case: the case and strap run off the edges as they will. From 4.66 to 4.68 the view made room for the case.
+
+## beta 4.68 (web version) · 18 Oct 2026
+
+Okay's notes of 22:35 on 4.67, phones and iPad.
+
+- **Under a finger, the slider and the name open the controller** — tapped or slid; the slider itself doesn't move. The number's field takes typing (the keyboard comes up) and − + step in place, as with a mouse. From 4.60 to 4.67 it was the other way round: the field and − + opened the controller ("On phones and ipad tapping or sliding slider or title opens controller, you can type in box or tap plusminus").
+- **The controller at three quarters on a phone** (narrower than 600): one scale token, `--num-pop-k`, multiplies every measure of it — discs, pills, value, signs, gaps. An iPad keeps it whole ("Controller too big on the phones, 75% scale").
+- **A hand's rows on a narrow screen**: name · slider · number box on one line, the slider taking all the room between, the short names (Round, Counter Ø) as on a wide screen. Until 4.67 they fell to the panel's six tiles there and the slider got one ("Hands sliders squeezed, use all row width").
+- **Choosing a font closes the font sheet** ("Font window, selecting font closes window").
+
+## beta 4.67 (web version) · 18 Oct 2026
+
+A Wear OS watch face (farukahmet's PR #1, ported; Okay, 21:20: "All three great on pull request").
+
+- **Export → Wear OS → APK**: the dial as a Watch Face Format face — the plate and every ring as one picture, each hand its own, the windows as sprite sheets, ambient (always-on) versions — packed and signed in the browser into an `.apk` to sideload onto a Wear OS watch (`adb install`, or a sideloading app).
+- **Its name on the watch** (a field under the button) makes its package's name too, so several dials can live on one watch. A new key `wearos_name`, empty to start.
+- Signed (v2/v3) with a **shared debug key**: right for one's own watch, never for the Play Store (said under the button). Checked here with apksigtool: v2 and v3 verify. Not tried on a watch.
+- `web/src/wearos/` (farukahmet's modules, as he wrote them; fflate's MIT notice put back) and `web/test/wearos_test.mjs` in npm test. His Windows tools for making the template APK stay on his branch (`pr-1`).
+
+## beta 4.66 (web version) · 18 Oct 2026
+
+A case round the dial, preview only (farukahmet's PR #3, "abstractified"; Okay, 21:20: "low number of colors, thick lines, minimal, maybe just sillhouettes of classics. One highlight one shadow").
+
+- **Case**, beside Backdrop: No case · Diver · Pilot · Dress · Sport. Each a silhouette of its kind, not of a model — a flat body, one lighter band on its upper left, one darker on its lower right; a diver's dark insert with its pip and five-minute bars and a coin edge; a sport case's flat bezel with sixty marks and two pushers; a pilot's onion crown; a slim gold dress case. Sized from the dial, so it fits any dial.
+- The view fits the case when one is chosen, and the dial again without it. Never in an export or the Tiny Preview (R26 updated). A new key `bezel`, none to start: older links look as before.
+
+## beta 4.65 (web version) · 18 Oct 2026
+
+Handles on the guides (farukahmet's PR #2, redrawn our way; Okay, 21:20: "Drag handles great as an idea, needs to be implemented in our ways and design, inner outer thing already has dotted line, all these handles should be in guide color, adapted").
+
+- On the Rings tab, with the selected ring's guide showing, **four handles in the ring's guide colour**, a hairline of white round them:
+  - a **disc on its dotted line** (what its radius measures to): dragged in or out it sets the radius;
+  - a **square on the far edge**: dragged, it sets how big one of its things is (a mark's length or a dot's Ø, a numeral's size, a band's width) — the edge follows the pointer;
+  - a **triangle outside the ring at its first position**: dragged round, Start;
+  - with a span under 360°, **a triangle at its end**: dragged round, Span.
+- The radius and size handles stand between the first two positions, never on a mark. Each says what it does in a tag; a press that doesn't move changes nothing. They set the ring as its rows do (undo, the guides live while dragged).
+
+## beta 4.64 (web version) · 18 Oct 2026
+
+One number box for the whole tool (Okay, 18 Oct, 21:20: "This version of boxes win: small plusminus and these new thick border ones are retired, these replace all with two changes. Number box touches minus box. Signs grow inside the box as much as these new thick bordered ones. Also add the chevron version with only one box same style").
+
+- **Every number** is the full row's box: the value, then − and +, touching, one hairline of the rule's grey. In a full row the value takes the unit that stood between it and its − +.
+- **Beside a hand's box, in a quiet row and in Positions** the same box, narrower. The quiet number with its tiny ± (4.45.1–4.63) and the thick-lined blocks of the font box and Positions (4.54, 4.56) are gone. A side row's name opens the controller, as a full row's does.
+- **The signs are drawn**: 12 across in a full row's box, 9 in a narrow one.
+- **The chevron box** (Count, Every): the value and one ⌄ box in the same style.
+- The Blank face row lays its words under its button, as Reset's First dial does (they wrapped a word a line).
+
+## beta 4.63 (web version) · 18 Oct 2026
+
+Okay's notes of 21:20.
+
+- **Tags wrap**: no line longer than 240, balanced, kept inside the window ("constrict the width to avoid these unreadable lines").
+- **The phone's bar**: the time and AM · PM at 17 (were 12: "Time and am too small"); how fast gives up the room.
+- **The date in Inter SemiBold**, still stacked ("three tier with barlow abort, try inter with appropriate weight for that size"): a cut of its figures, "Dial Date" (`fonts/ui/date_font.py`).
+
+## beta 4.62 (web version) · 18 Oct 2026
+
+The date (Okay, 18 Oct: "Date best set at the bar, short date, 07/10/28 style, stacked barlow medium or bold, next to am, touching. Default from system date").
+
+- **A date in the bar**, touching AM · PM: day, month and year stacked in Barlow Bold (18 · 10 · 26). Today's to start, wherever the dial is opened; a press opens the system's date picker; **Now** brings today back.
+- **Windows follow it**: a date or day window with *Follows the date in the bar* says the day of the month or the weekday; a moon window shows the moon's age for that day. A day window's **Names**: EN · TR · DE · FR · IT. The typed text (and the moon's age) wait underneath for when the window doesn't follow.
+- The default watch's date window follows the date; a window switched on with its starting text (17, MON) follows too. Older links keep their typed text: new keys `date`, `follows`, `names`, off to start.
+- The engine behind it: `web/src/moment.js` (one moment — a date and the time — for every complication).
+
+## beta 4.61 (web version) · 18 Oct 2026
+
+- **The complications act like tabs** (#328: "selecting them changes settings accordingly"): each kind — date, day, AM · PM, moon — keeps its own settings for the window (shape, size, text, colours, font). Taking a kind back brings its own back; a kind taken for the first time starts from what the window has. Where the window stands (its place and radius) is shared. Kept while the tool is open; a link keeps the window as it is shown.
+
+## beta 4.60 (web version) · 18 Oct 2026
+
+Okay's notes on 4.59 from the iPad (18 Oct, 20:39).
+
+- **Under a finger, a row's − + and its field open the controller** ("All these + - buttons on mobile, they get the new controller, not the desktop"): no stepping in place and no keyboard. A mouse still types and steps in place.
+- **The kinds menu has no note under it** ("Remove the explainer from dropdown").
+- **Start and Span lose trailing zeros** (−142° rather than −142.0°), so the value fits its box in Positions.
+
+## beta 4.59 (web version) · 18 Oct 2026
+
+Tiny Preview (notes 2, #337).
+
+- **An eye at the preview's top right** opens the Tiny Preview: the dial with its margins at its own size — the browser's millimetres, about right on most screens ("approximation fine for now") — on the backdrop, framed in ink with round corners and a hard shadow, over everything. It follows the dial as it changes.
+- **Drag it anywhere.** Its eye, at its top left on hover or after a tap, puts it away; it opens again where you left it.
+- **Guides moved to the bottom left**, between Backdrop and Shadows; their list opens upward.
+
+## beta 4.58 (web version) · 18 Oct 2026
+
+The small ± adjusters (notes 2, #317).
+
+- **A quiet number and its ± are one press**: anywhere on them opens the controller. The signs are a picture of the controller's − and +, and the number is not typed there (from the keyboard: Tab to it, Enter opens the controller, the arrows still step it).
+- **The tiny plus 4 px higher** than the figures' top.
+
+## beta 4.57 (web version) · 18 Oct 2026
+
+A window's width and height, linked (notes 2, #358).
+
+- **Two rows again**, Width over Height, each with its slider ("Two sliders on one line is not a good idea … two stories tall").
+- **A LINK pill** on the line between them, at their names: a white outline on the pane's grey, LINK in the pixel font. Pressed it turns ink with **LINKED** in white, and changing one keeps their ratio, as in Illustrator.
+- Kept with the dial: new keys `wh_link` and `da_wh_link`, off in every older link.
+
+## beta 4.56 (web version) · 18 Oct 2026
+
+Positions after Okay's drawing (notes 2, #357).
+
+- **The preview, large**, at the left, three rows high. It is a control now: a press in its outer band (the marks, the dot) drags the **start** round the dial; a press inside drags the **span's end**. The span is a **dotted arc** ("make it dotted instead of ruler"), ending in a small ring.
+- **Count and Every are menus**: the usual numbers, then *Custom…*, which turns the box into a field with → (Enter takes it, Escape puts the menu back).
+- **Offset, Start and Span are number blocks**: the value and its − + in one box, as in the font box (#317). Each name still opens the controller and drags the value.
+- **Skip those** (was *Skip those instead*) has an (i): a tap or the pointer shows what it does. Offset's name says what it does in a tag.
+- On a phone the controls stand in one column beside the preview.
+
+## beta 4.55 (web version) · 18 Oct 2026
+
+The selected ring after Okay's Photoshop drawing (`selected-ring_181026`; notes 2, #335, #327).
+
+- **The selected row** carries the ring's **size and radius** at its right, in Dial Mono, each over its button in the drawer ("Large mono numbers for size and radius, slashless 0 if possible"). Dial Mono, cut from JetBrains Mono for the unit box, now has the figures; its 0 has no dot (`web/fonts/ui/mono_font.py`).
+- **The kind** is changed from the selected row's kind icon: a press opens the kinds. The drawer's kind square is gone.
+- **The drawer** writes the ring out on two lines, grey names and dark values: what it draws (*Arabic: 12, 3, 6, 9*, *Text: AUTOMATIC*, *Shape: Bar · Length: 2.4 · Width: 0.7*, *Width · Fill* for a band), then where (*Positions: 12*, and a start, a span, a give-way or nudged numerals when there are some). **Change** is gone ("meaningless").
+- The colour is a **bare swatch**; size and radius are pressed (the controller) or dragged, with **no tag**: their numbers are right above. The rename box at half its grey.
+- **Fixed**: in 4.54, selecting a ring whose font is not in the catalog (a markers ring of the default watch) stopped the panel — the Type pane's summary had an empty part.
+
+## beta 4.54 (web version) · 18 Oct 2026
+
+The font box after Okay's Photoshop drawing (`font-selector_171026`, light and dark; notes 2).
+
+- **A grey head** (#334, #321): on the panel's grey, the preview on white 4 in from the box's edge, then the name's line — the family's name grey and bold, running up to the text's colour, and **EN** at the line's right end (it was inside the preview's cell). **No Change…**: the preview and the name open the font sheet, as they did.
+- **The chosen style** mid grey with white words (was ink).
+- **Number blocks** for Size and Tracking: the value and its − + joined, one thick line of the rule's grey round them ("new number entering blocks", to come elsewhere: #317).
+- **The Type pane** (#318, #319): open, its heading is just the eye, the box beside it from the pane's top; folded, its line says the family, style and size.
+- **Dark** (#320) darkens a font box's preview only; the rest of the box keeps its look.
+
+## beta 4.53 (web version) · 18 Oct 2026
+
+Mechanisms after Okay's answers (18 Oct, 19:02). Goes live with 4.52.1 and 4.52.2.
+
+- **Numerals tangent to the ring** (#338: "Tangent to inner or outer"): the radius' menu gains **Outer edge** and **Inner edge**: every numeral's ink touches the radius, from inside or from outside — an upright numeral by the corner of its box that faces the edge, one turned with the ring by its top or foot. Like Illustrator's paragraph alignment for a ring of figures.
+- **A change of what the radius measures to moves nothing on the dial** (#326: "Nothing changed … just the dotted line moves"; "applies to reverse auto reverse"): the radius changes with it, so only the dotted line goes. Marks and bands keep their outer edge (outer · middle · inner); numerals keep the first label's middle — exact for radial and auto-flip, where every anchor lies on one line. Undo takes both back.
+- **One mark nudged** (#349, groundwork): ticks and markers read the ring's per-position Nudge as numerals do — radius ±, angle ±, size ×, turn. Nothing in the window sets it yet: picking and editing one mark comes with its design.
+
+## beta 4.52.2 (web version) · 18 Oct 2026
+
+Okay's answers of 18 Oct, 19:02 ("Rest is good, common sense wins go"). Goes live with 4.52.1.
+
+- **The day's needle** (#343: "Ruler pin does not move on bottom bar"; notes 2: "The moving needle is 1px wide and red, starts from the bottom of the screen"): the slider's own thumb kept its place whenever the slider had the focus — after a tap on it, on an iPad — so the time moved and the pin didn't. Now a red needle, 1 wide, from the ruler's top to the bar's foot, placed from the time itself; the slider's thumb is not drawn. Presses and drags on the day's strip are read by the tool and set the time (a press that doesn't move still goes to the nearest step), so scrubbing works the same in every browser; the slider stays for the keyboard and a screen reader.
+- **Showcase left of the eye** (#341): the iris switch stands left of the eye switch, a unit apart (over it since 4.42.4).
+- **Same font as Hours** (#359): a window's way back to the numerals' font was called *Copy style of*; it never copied.
+- **A disc hand's window inside its disc** (#344): *Inside the disc*, a tick in the disc hand's rows; its window then ends at the disc's edge however long the hand is. A new key (`mark_in`), off in older links so they draw as before, on for a hand made a disc in the tool.
+
+## beta 4.52.1 (web version) · 18 Oct 2026
+
+Okay's eye on 4.51.1's items drawn from his words (18 Oct, 18:55).
+
+- **The kind pictures** (#255, "Do my notes"): the numerals' 12 in proportional figures, 0.75 tighter; the text ring's ABC · XYZ a weight heavier (800), tracked 0.5, the two lines 7.5 apart (were 9).
+- **Give way** (#258: "thicker indices, better indication of the actual state on watch. And left knockout not a button, these are regular rows, changing to fit this view"): this ring's ticks 3 thick, in ink; the marks of the rings above drawn as faint outlines lying on the ticks where they really would, so the ticks run through them (nothing), are gone under them (Skip where) or stop the clearance short of them (Knock out). *Skip where* and *Knock out* are rows now — a row's grey, the rows' white lines, no frames — the chosen one in ink, lit white and joined to the square as before.
+- **Placement's pictures** (#259: "Thinner lines overall, thinner but big headed arrows, try again"): the circle and the arrows' stems 1.25 (were 1.5), each head a filled triangle, 2.75 long and 3.5 across.
+
+## beta 4.52 (web version) · 18 Oct 2026
+
+From Okay's notes 2 (18 Oct 2026; build list #316–#359, all of them ranked there), the small ones (Okay: "in the meantime start working on small things").
+
+- **The controller, second drawing** (#330; `controller 2.svg`: "The new controller is in. No name necessary, preview shows what's changing anyway"): one dark square (the grey, 251 × 248, corners 49.5) holding three things 66 high — the value in bold 41 on a grey pill, the slider in a white pill (its line 10, the knob 44 with a white eye), and − and + as two dark discs with square-ended white signs, one at each side, 86 apart; 16.5 round them, 8.25 between. No name: a row's menu (the numerals' anchor) stays on the row. R15 rewritten.
+- **The default watch is Okay's link** (#331: "This becomes the default watch"): Barlow SemiBold numerals at 4.8, four ticks, grey hour and minute hands, a red seconds hand, a Barlow Bold date at 3, a red backdrop. It is what the tool opens with, what Reset and Defaults bring back, and the Gallery's first card. The guide's First dial steps no longer end on it (said at the guide's next rebuild, R25).
+- **Copy link on an iPad and in Safari** (#332): WebKit lets a page write to the clipboard only while the click is fresh; the link was packed first, so the copy was refused, silently. Now the clipboard is asked at once and handed the link when it is ready (a ClipboardItem holding a promise); writeText after the wait stays as the fallback. The button says **Copied** or **Not copied** for 1.6 s (R17); not copied, the link box is selected. Tested in Chromium only: WebKit can't be installed here.
+- **A blank face** (#333: "White dial color, no rings, etc."): a **Blank face** button in Dial › Reset gives a white plate and the hands, one ring hidden (the list is never empty), no windows. Undo brings the dial back.
+- **Complication** (#328): the Windows page's *Shows* row is named *Complication* (glossary).
+- **The Show box's tick** (#323: "just as big as shows ascender … the outer gray box does not change size; padding … equal top, left, bottom"): 9 high at 12 px words, with 8.5 left, over and under it.
+- **The Custom labels note under its field** (#324): a note about a field starts on the field's column (`info(…, { under: true })`; the rule was there, nothing could ask for it).
+- **No second line under the pinned part** (#325): the first pane *shown* under it has no line of its own (until now the first in the list, which in a numerals ring is the hidden Text pane).
+- **The zoom area** (#342): the magnifier first, then − + FIT side by side, sharing their lines; how to zoom and move is the magnifier's tag ("⌘ + scroll zooms · drag moves · pinch on a trackpad"; on a touch screen "Pinch to zoom · two fingers move", shown a moment on a tap); the words at the left are gone. On a touch screen **one finger no longer moves the dial**: two do, with the pinch. A tag with no room under it (the bar) stands over its button, its arrow down.
+- **G turns the guides on and off** (#353), as the Guides switch does; not while typing, nor with ⌘ · Ctrl · ⌥ or ⇧.
+- **The Gallery's chosen card** (#355: "these options should not push all the rows, just that cell grows. No outlines, just full colours, bigger cell padding and walls"): filled with the chosen tint, no line round it; its two choices grow down over the row under it; walls 8.25 (were 5.5), room inside 11 · 11 · 8.25 (were 8.25 · 8.25 · 5.5).
+- **Tags** (#356: "more inner padding and centeredness and 1px borders"): 5.5 over and under, 11 at the sides (were 2.75 and 8.25), the words centred, a hairline round them (was 2 px).
+- **vibecoded** (#340), in the bio.
+- **The showcase's arrow and ✕** (#350, #352): the side-to-side arrow's stem in three, straight · dashed · straight; the ✕ on the iris is cut by the eye switch's absent eye, so its lines stop where the eye's rays stop and leave the iris alone.
+- **The Guides list's bottom section** (#322: "the functions are below, grouped under a lighter bg color area. The grey area grows to include add line … Smaller color dots, closer, much compacter width. Fainter unselected swatches … a 1px dark gray border when selected"): Add and the guides added under it stand on the section's ground with Thickness · Reset All, 5.5 more room over Add; the colours 8 across (were 10), 7 apart (were 9), so the list is 275 wide (was 311); a colour not chosen at 40 % (was 60 %); in a dark popup the chosen one of All · Selected · None keeps a 1 px dark-grey line.
+- **The disc hand's tile** (#344): its marker a cut-out inside the disc, as a disc hand's window is (it ran outside the disc).
+- **The icons as SVG files** (#336): `web/icons/archive.mjs` writes every icon the icon check finds into `web/icons/svg/`, one file per drawing.
+- **A controller left open no longer outlives its dial** (found on the way): picking a Gallery dial, Reset or a link while a controller was open left it standing over the new panel, catching presses. The tool closes it when it opens a new dial.
+
+## beta 4.51.1 (web version) · 17 Oct 2026
+
+- **The magnifier out of FIT** (#315; Okay, 17 Oct: "icon moves out of the fit box, sits in between plusminus and fit; the horizontal padding like now and am"): at the bar's right the zoom area is now − + · the magnifier alone, in the bar's light tone · **FIT**, a word button as wide as its word and NOW's padding either side (a column wide, with the magnifier inside, since 15 Oct). The phone's own rule for FIT's width went with it: the one rule serves both.
+
+## beta 4.51 (web version) · 17 Oct 2026
+
+Phase H, the fonts, from Okay's notes (p. 12–13) alone (17 Oct: "draw me all the sketches … proceed with plan").
+
+- **EN** (#273): the language button says **EN** while the font sets the language itself (nothing is stored; "Lang." until 4.50.2), and stands at the right **inside the preview's cell**, on the cell's grey, so it knocks the preview out where it reaches. The name line keeps the name, the colour and Change…. Okay's "end gray lines with the text as shown here" stays unread (#273's open part).
+- **The box's sliders, wide** (#274; "break the rules"): in the font box the rows (Size, Tracking, an axis) give their name a column of twelve characters, cut past that, and the slider all the rest; the number and the stepper stay where every row has them. A special, `--font-label` (R32).
+- **The styles as tabs** (#275; Okay, 16 Oct: "it is a part of the font so it needs to look like tabs of the upper box which is the font name"): Regular · Medium · Bold… are tabs **hanging from the line under the font's name**, the hand tabs turned over (their notches at the foot, no line of their own at the top, one line between neighbours; `.tab.hang`); the chosen one ink with paper words; more than fit slide sideways. A variable font with a weight axis and no named styles gets **Regular · Bold** here, which set the axis (what a font may offer here is limited to bold and italic; the other axes stay down with the sliders).
+- **Light · Dark** (#276): a pill at the top middle of the font sheet, between Fonts and Find, shows the previews on white or on a dark grey; kept for the session (sessionStorage), not in the dial. The font boxes follow it: the inverse of their white, never pitch black (Okay, 16 Oct: "inverse of existing block can't be black") — a dark grey ground (`--font-night`), near-white words, lighter lines; inside, the usual names turn over, so what is chosen is light with dark words (R32's chosen layer holds).
+
+## beta 4.50.2 (web version) · 17 Oct 2026
+
+- **Give way, pictured** (#258; Okay's notes, p. 4: "what's happening should be visible here"): *Skip where* and *Knock out* are **side tabs** at the left, cells drawn with the rows' white lines; the open one lights up white and reaches onto a **white-bordered square** beside it. In the square: a drawing in the icons' line, twice an icon's size — a row of this ring's ticks and, over them, faint, three marks of rings above (a marker, a numeral, a tick); the choice is read off it: Skip where takes the tick under each named mark away, Knock out cuts it back by the clearance (20 px a mm in the drawing, never less than a line). At the foot the four choices as **radio buttons** (new: a round sister to the tick box, ink ring and disc), and under them **Clearance** as a quiet row (R15 B), only on the Knock out tab and only when something is knocked out (R16). Which tab is open is the session's, not the dial's (R31 free). On a phone the two tabs stand over the square. The folded pane says the two choices and the clearance.
+- **Placement's tiles redrawn** (#259, closing #142; Okay's notes, p. 6: "each shows what it does on a ring, as auto-flip's does; no clash with the dial's ring; cleaner arrows with stems, six arrows each"): each tile is a micro dial — the ring as a faint circle and on it six arrows with stems, each the way up of a numeral standing there. Upright: all up. Radial: pointing out. Auto-flip: out above, in below. On path: along the ring (Claude's reading: the word runs round the ring). The A's at 3 and 6 o'clock of 4.36 are gone. Every arrow point sits on the quarter points, so an upright stem covers whole dots (R33).
+
+## beta 4.50.1 (web version) · 17 Oct 2026
+
+- **Positions, with a preview** (#251; Okay's notes, p. 5: "none of these need slider — text boxes and ±; a ring-specific preview at the left, like the hands' detail box: round, not in a square box, with even padding, it may use the eye's column"): at the pane's left a round drawing of the ring's positions — a faint circle, a mark at every position, the used ones in ink, the ones Every · Offset · Skip leave out faint, the first position a dot, so Start is seen (the answer chosen on 16 Oct). It stands where the hand's box stands (the eye's column and the next), as high as the rows beside it, the circle as large as that allows with a unit round it, no frame. Beside it Count · Start ° · Span ° · Every · Offset as **quiet rows** (R15 form B, declared as such now: `quiet`): the name and the number with its compact ±, no slider on the row; the name or the number opens the controller, whose slider does the sweeping. *Skip those instead* beside the box too.
+
+## beta 4.50 (web version) · 17 Oct 2026
+
+Phase G's rest begins, from Okay's notes alone (17 Oct: "now draw me all the sketches … proceed with plan"): the ring drawer and the rows.
+
+- **The ring drawer** (#253; Okay's notes, p. 2–3): the five kind buttons are gone. At the left a **square lit with the ring's kind** (ink, its picture in paper, 36 like the other buttons); beside it the **details** in words — "12 numerals · size 2.4 · radius 10", in the unit box's unit — left-aligned and cut with an ellipsis when the line is short; then **Change**, underlined, never cut, which takes you to the ring's settings (the first pane under the pinned part); then colour · size · radius as before (the answer chosen on 16 Oct). A press on the square opens the five kinds under it, over everything (the list scrolls and would cut it), the ring's kind marked, ending with the note "Settings stay with the ring. Switch back any time." (Okay, 16 Oct: "ok, recommended"; his warning line was not true, R7).
+- **The rows** (#254; "no text details, only the kind icon … no adjustments, just an indicator"): a row is eye · grip · the kind as an icon · the name (and the selected ring's rename box). The summary of 4.7–4.49.2 (how many, colour, size, radius) and the colour chip are gone from the rows; the drawer says them. The name stays (the answer chosen). The list's columns: eye · grip · kind (the icon, the drawer's square) · name (the details) · Change · colour · size · radius.
+- **The kind pictures** (#255; "a smaller optical size; abort silkscreen there"): the five drawings a size smaller in their 24 box (radius 9.75, was 11), the numerals' 12 · 3 · 6 · 9 and the text ring's ABC · XYZ in the tool's sans, bold (`.figure`), not the pixel font, which now stays for the stickers and the tiny numbers elsewhere.
+
+## beta 4.49.2 (web version) · 17 Oct 2026
+
+- **The number popup is the controller** (#314; Okay's drawing of 17 Oct 2026, "to replace with our current one"): a light head — the name (with its bare chevron where the row has a menu) on a line of 28 over a hairline, inset 22, and the value in bold 25 standing over the slider's knob and moving with it — and under it a dark square (#3F3F3E) holding the slider in a white pill and − and + as two grey discs with white signs (8 thick, 40 long), all three 66 high, a unit and a half round and between them, no frame. 157 × 223 (166 × 219 before). The track is a unit and a half thick, dark to the knob and light after; the knob 44 with a white eye of 12.
+  - **Where it stands:** at the finger — the knob under the point that pressed, kept inside the window ("appears covering everything, finger on the middle slider section upon tap, place as needed, on top of everything"). From the keyboard, or with no slider (a window's places), under its button as before. The phone's sheet is gone: the same everywhere.
+  - **It comes at once and fades after use** ("comes lightning fast, fade away quickish after use"): no way in; 1.2 s after its last use (a slide, a press on a disc) it fades out in 120 ms (`--num-pop-linger`, `--num-pop-fade`, `POP_LINGER_MS`). A press held, or typing, holds it; Escape, Enter or a press elsewhere put it away at once; none of it where the system asks for less motion.
+- **The play flash** (#308, again; Okay: "like a flash: zero to bright in milliseconds, then slow descent. but all very quickly"): the triangle goes from nothing to full within the first 3 % of the flash (12 ms at 1×; a fifth before), then descends, eased; the whole flash is 0.4 of a beat (half before), in real time below 1× as before.
+
+## beta 4.49.1 (web version) · 17 Oct 2026
+
+- **Six more dials in the Gallery** (#287; Okay's notes, p. 18: "a few with windows — am · pm, or an arced date as on a presidential Rolex; a few colourful ones, do not have to be historical, homages welcome"), drawn for Okay to pick from — he keeps what he likes, the rest go: **Day and date** (the day in an arc under 12, the date at 3, batons on champagne) · **Dress, am · pm** (Bodoni on ivory, a dot track, am · pm in a round window at 6) · **Moon phase** (midnight blue, a moon in an arch at 6, thin gold figures) · **California** (half Roman, half Arabic in D-DIN on coral) · **Rally** (a yellow racing dial, a tachymeter ring, a RALLY text ring, a date at 6) · **Teal and coral** (coral Unica One figures on teal, white dots, the date on a coral disc). Two use the text ring (4.48). The zigzag places them with the rest (19 cards, seven lines).
+
+## beta 4.49 (web version) · 17 Oct 2026
+
+Phase J, the Gallery: its order, a card in focus, a tuning pass. (#287, six new dials, still to draw.)
+
+- **The Gallery's order** (#286; Okay's notes, p. 17–18: "the new default watch first; Okay's watch last; just whites zigzag diagonally"): the First dial first, Okay's watch last, and the white dials on the diagonals of the three-column grid — the third slot, the middle of the next line, the first of the line after, and back (`gallery_order`); the rest keep their order between. Each card says whether its plate is light (`light`, from the plate's luminance, written by `gallery.mjs` and `examples.mjs`). Bauhaus-third (15 Oct) goes with it.
+- **A card walks into focus** (#289: "choosing a dial no longer takes it over; it comes forward with two choices, take over editing or open in a new window"): a press lifts the card (the chosen tint, the thick ink line) and shows **Edit this dial** · **In a new tab** (short, so it fits a card); Escape or a press elsewhere puts it back. The card is still a link, so a middle click or ⌘-click opens it as before.
+- **Okay's watch, tweaked** (Okay, 17 Oct 2026, his link: "Tweaked my dial in the meantime, replace"): the Gallery's last card is his new version — a window, a ring of numerals he calls Band — in `src/opener.js` (`OKAYS_WATCH`), lean as his link carries it.
+- **Tuned** (#288: "small numerals get a heavier weight and gradually more tracking … the field watch we have for example it fails; B-Uhr in neutral colours"): the Field's 24-hour figures in Barlow Bold, tracked +40 (SemiBold, untracked); Montgomery's every-minute figures in Barlow SemiBold, tracked +40 (Medium); the B-Uhr — Okay's layout — on a black plate with white marks and cream figures, hands and cap, no coloured backdrop (navy, red, cyan and orange before). The optical-size axis: none of the Gallery's fonts has one but Bodoni Moda, unused there.
+
+## beta 4.48 (web version) · 17 Oct 2026
+
+Phase I: the text ring. (Phase H, the font sheet's design, waits: Okay, 17 Oct, "push the design ui stuff for later".)
+
+- **A text ring** (#297; Faruk Koç's finding of 16 Oct, Okay: "makes perfect sense … Snap to indice is a great idea for this"): a fifth kind, `text` (appended, R9): a line of words — a brand, *AUTOMATIC*, *SWISS MADE* — said at every one of its positions, with a font of its own. It is the numerals' pipeline with one label: HarfBuzz, the anchor (centre · baseline · ascender), the four placements (level, radial, auto-flip, along the circle), Nudge, live text in exports, the guides' edges, a click on the dial, Give way (it counts with the numerals: "markers & numerals above").
+  - A new one starts as *AUTOMATIC*, once, under the centre (start 180°, radius a third of the dial's, size 1.2 mm), with the top numerals ring's type.
+  - Its panes: **Text** (the words) · Type · Resize · Positions · Give way · Nudge. Its row says "1 text", "3 texts".
+  - **Snapping to the indices**: its Start ° holds to the positions of the other rings — the hours' markers, the minute ticks — when it comes within 2° of one (`SNAP_DEG`), typed or slid alike.
+  - The kinds' menu and the drawer show five kinds; the picture: words on the dial, in the pixel font, under 12 and over 6 (the drawer's icons are reworked later, #255).
+  - `dial.py` does not know the kind (R30): a settings file with a text ring is the web version's alone.
+
+## beta 4.47.2 (web version) · 17 Oct 2026
+
+- **Names a screen reader hears** (#244, from the guide's readers, 15 Oct 2026): a ring's row is an option in a listbox, reached with Tab (the controls' focus ring) and taken with Enter or Space; every slider says its row's name (only the field had it); a colour pill says whose colour it is before its hex ("Colour #141414", "Plate #FCFCFA"); in the showcase the panel and the bar are inert — out of reach for the keyboard and a screen reader. The size and radius popups' fields are already named by their row (4.45.2), and the font box's Size reads once; both are checked now.
+
+## beta 4.47.1 (web version) · 17 Oct 2026
+
+- **Selecting a ring fits the list** (#256; Okay's notes, p. 2: "even if only a few pixels of it show, scrolls so its whole row and drawer are in the view box"): the ring list scrolls so the selected ring's row and the drawer under it are whole in view (the row wins when both can't fit). The finger's anchor (15 Oct) takes the row's new place as its own, so nothing fights.
+- **The list's pill** (#256: "when its scrollbar comes on … a resize pill appears in the middle of its bottom black line, like the phone's gripper but black"): with more than five rings a black pill with a paper groove stands in the middle of the pinned part's line, the gripper's measures (`--grip-…`). Dragging it shows more or fewer rows (whole rows, it snaps; one to all); a tap jumps between five and all. Kept by the browser (`dial-tool-ring-rows`), not by the dial. The list's height is `--ring-rows` on the list (five to start).
+
+## beta 4.47 (web version) · 17 Oct 2026
+
+Phase G's first push: the panes' order and *resize from*.
+
+- **Type first in a numerals ring** (#296; Okay: "Move fonts top of adjustments in rings that involves fonts"): the font box is the first pane under the pinned part (it was the last).
+- **Resize, the first pane for every ring** (#257; Okay's notes, p. 9: "a proper pane below the quick size and radius buttons … shown first"): how big one thing is — Length for a mark, Ø for a dot, Band width — and the radius, as full rows. Length and Ø leave the Shape pane (which keeps Width for bars and wedges), Band width leaves the Band pane. A numeral's size stays in the font box, among the type's settings (and in the size button's popup); open for Okay whether it should stand here too.
+- **Resize from** (#257: "resize from — outer end · middle · inner end"): a new ring key `from` (appended to the link table; starting at the outer end, so every link draws as before, R31). The radius of ticks, markers and bands measures to the mark's or band's outer end, its middle or its inner end: the small menu beside the radius' label, as the numerals' anchor menu (13 Oct); the label reads Outer · Middle · Inner radius, and the ring's row and the radius button's tag say it. A ring's dotted guide is now that radius (a numeral's anchor), not the middle of its extent; a window's is still its middle. `dial.py` ignores the key (R30).
+
+## beta 4.46.7 (web version) · 17 Oct 2026
+
+- **Twenty-one fonts join the list** (#313; the font research of 16 Oct, `docs/font-tiers-2026-10-16.md`, its top tier; Okay, 17 Oct: "incorporate it, push the design ui stuff for later. Add just font list to defaults in these versions nothing else"). The font sheet lists 42 families (21 before). Nothing else changes: the sheet's design (phase H, #273–#276) waits.
+  - From Google Fonts (OFL): Anybody · Bebas Neue · Cinzel · Italiana · Marcellus · Public Sans · Sometype Mono · Space Grotesk · Tourney · Unica One.
+  - D-DIN (Datto, OFL), in four cuts: Regular · Bold · Condensed · Expanded — from a GitHub copy of Datto's own archive, since Datto's page is not reachable from a session.
+  - From Peter Wiegel's zips (OFL): Alte DIN 1451 Mittelschrift · Apollo · Bernardo Moda Contrast · CAT DyFa · CAT Kurier · Erika Type (Regular, Bold) · Immermann · Koch-Fraktur · TGL 0-16 (Regular; DIN 17 as its Slanted style). And GL-Nummernschild (Mittelschrift, Engschrift), Gutenberg Labo's free-software font: its licence lives only in the font's own name table, so that text is kept by hand in `web/fonts/licences/`.
+  - `web/fonts.mjs` has three sources more (`wiegel`, a zip opened with `unzip`; `gutenberg`; `datto`), and a space in a file's name becomes a dash. Alte DIN's bolder `_g` file is left out: it carries the same PostScript name as the regular, so the catalogue (keyed by it) could hold only one.
+  - The page grows by the new families' outlines (about 300 kB); the fonts themselves are fetched when first chosen, as before, from the live page's `fonts/`.
+  - Reserved Font Names on most: files are passed on whole, never subset (research §4).
+
+## beta 4.46.6 (web version) · 17 Oct 2026
+
+Three small ones left over from Okay's marks on 4.46 (handoff §1).
+
+- **The number popup, third look** (#310; Okay: "pill height equals the plus and minus. But that growth does not affect slider, it may move up for good padding. Name is on top, lighter, chevron boxless"):
+  - the value's pill is as high as the − and + discs (66, was 44); the slider's pill stays 44. The popup is 219 high (was 197);
+  - a popup with a name (a row with a menu, such as *Centre radius*) shows it on top in a lighter grey (`--num-pop-name`, the rule grey #B9B9B4; the pills' mid grey before) with its chevron bare, no box;
+  - the name's line is as high as its words (12, was 18), so its ink stands 13 from the frame, as the discs do at the foot ("top padding equals the bottom"); the slider follows it at the usual gap (8.25), 6 higher than in 4.46.5.
+- **NOW darker** (#307; Okay: "darker than ams outlines by 20%"): its fill is the bar's light tone (AM's outline, #737373) made 20 % darker, #5C5C5C (`--bar-now`; #B9B9B4 since 4.45.5). Its word turns light (`--bar-now-ink`, the panel's light rule tone #D4D4CF — not white: nothing on the bar is, 15 Oct): the bar's dark on that fill would read 1.7 : 1; now 4.5 : 1. A hover 10 % darker than the outline; a press still the outline's tone.
+- **The play pulse at slow speeds** (#308; Okay: "the play animation flash and dim the arrow much faster on slow speeds, flash brighter. Like an analog fade. Eased over the line and comes back kind"):
+  - below 1× the triangle's flash lasts as long in real seconds as it does at 1× — half a beat (half a second on a quartz movement) — instead of stretching with the slow motion (five seconds at 0.1×). It still starts on the beat, with the seconds hand's step;
+  - its peak there is full (`--play-tri-slow` 1; 0.7 otherwise), set by the button's class `slow`;
+  - the flash itself is a lamp's: an eased rise over its first fifth, then an eased fall (`PULSE_RISE`; a jump to full and a fall before). At 1× the rise is a tenth of a second. A sweep's breath runs in real seconds below 1× too.
+  - The cap's own fade (the whole beat) is as it was.
+
 ## beta 4.46.5 (web version) · 16 Oct 2026
 
 - **A hand's page, the shapes' first black line moves down** (#311; Okay: "Short black line is part of hand selector. Comes after wall and preview box … THERE'S A SPACE. THEN COMES BLACK LINE. BUT THAT SPACE, IS THE SAME WITH ALL WHITES AND BLACK AROUND HERE"). The box and the last row (Wall) end on one line. Then come two units of space (11 px), then the thin black line that opens the shapes' row. In 4.46.4 that line lay on the box's foot. The thumbs keep two units to each black line, so every space here is the same.

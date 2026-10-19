@@ -39,15 +39,13 @@
      while time runs it pulses with the beat between its two bounds, faster than the cap fades (--pulse-tri, app.js) */
   .play .arc-play { fill: var(--white); opacity: var(--play-tri-rest); }
   .play[aria-pressed="true"] .arc-play { opacity: calc(var(--play-tri-low) + var(--pulse-tri, 0) * (var(--play-tri-high) - var(--play-tri-low))); }
+  .play.slow { --play-tri-high: var(--play-tri-slow); }      /* below 1× (slow motion) the flash peaks brighter (#308) */
   @media (prefers-reduced-motion: reduce) { .play[aria-pressed="true"] .arc-play { opacity: var(--play-tri-rest); } }      /* no pulse there (pulse()): the triangle as at rest */
   .play .arc-cap { fill: color-mix(in srgb, var(--play-light) calc(var(--pulse, 0) * var(--play-pulse)), var(--play)); }      /* --pulse: 0 to 1, set by app.js (pulse) with each beat while time runs */
   .play .arc-hi { fill: none; stroke: var(--play-light); stroke-linecap: round; }
   .bar .lead .play:hover .arc-cap { fill: color-mix(in srgb, var(--play-light) calc(12% + var(--pulse, 0) * var(--play-pulse)), var(--play)); }
-  /* how fast: a box with its track — a black line with a knob at each end, 1X and 720X over them (no ball since 15 Oct, 01:59); earlier notes:
-     the ball, outside the box, in the middle of the room between the box and the bar's top, at the hours' size
-     (Okay: "Remove the humps but the one at 1x. Hump=ball in the middle of the line. Put 1x above the dot centered
-     in the remaining gap outside the box in ruler number's font size"). --at: how far along the track, 0 to 1; the
-     thumb's half-width at each end, so the ball is under the thumb's centre at 1×. */
+  /* how fast: a box with its track — a black line with a knob at each end, 1X and 720X over them. --at: how far along
+     the track, 0 to 1; the thumb's half-width at each end, so the knob is under the thumb's centre at 1×. */
   .bar .lead .speeds { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--u2); height: var(--bar-control); padding: 0 var(--speed-pad); border: var(--hair) solid var(--bar-light); }
   .bar .speedtrack { position: relative; flex: 1; min-width: 0; height: 100%; }
   .bar .humps { position: absolute; inset: 0 calc(var(--speed-thumb) / 2); pointer-events: none; }
@@ -78,25 +76,53 @@
   .bar .timewell:hover { background: var(--bar-field); }
   .bar .lead .timewell .time { width: var(--time-chars); height: 100%; padding: 0; border: 0; background: none; font-family: var(--time-face); font-size: var(--t-time); font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: var(--time-track); color: var(--bar-light); translate: var(--ink-dx, 0) var(--ink-dy, 0); }      /* Dial Time, its figures as thin as the box's line (#284) */
   /* AM · PM in the same face and size as the time, its box attached to the time's (Okay, 16 Oct 2026, on 4.44: "am
-     attached to time and same size barlow"; a smaller box beside it in 4.44), one width for both words. A frame,
-     never filled (Okay, 15 Oct 2026, 00:18); less room beside its word since 4.45.5 (#306: "Reds reduce hor padding") */
+     attached to time and same size barlow"), one width for both words. A frame,
+     never filled (Okay, 15 Oct 2026, 00:18); little room beside its word (#306: "Reds reduce hor padding") */
   .bar .lead .timebox .half { box-sizing: content-box; width: var(--time-pm); height: calc(var(--bar-control) - 2 * var(--hair)); padding: 0 var(--u2); border: var(--hair) solid var(--bar-light); border-left: 0; font-family: var(--time-face); font-size: var(--t-time); font-weight: 300; letter-spacing: var(--time-pm-track); background: none; color: var(--bar-light); }
-  /* NOW: capitals, at AM · PM's size (Okay: "Now uppercase and in pm's font size which grows 1px"); filled, light, its
-     word dark (#306, 4.45.5) */
-  .bar .lead #now { padding: 0 var(--u3); border-color: var(--bar-now); background: var(--bar-now); color: var(--bar); font-size: var(--t-s); text-transform: uppercase; }
-  .bar .lead #now:hover { border-color: var(--bar-now-hover); background: var(--bar-now-hover); }
-  .bar .lead #now:active { border-color: var(--bar-light); background: var(--bar-light); }
+  /* the date (Okay, 18 Oct 2026: "short date … stacked … next to am, touching"; 19 Oct: no year, "better fit inside
+     the bounding box"): day over month in Inter SemiBold ("try inter with appropriate weight for that size"), its box
+     touching AM · PM's as AM's touches the time's. A press
+     opens the system's date picker, an input lying unseen under the box */
+  .bar .lead .timebox .datewell { position: relative; display: flex; }
+  .bar .lead .timebox .date { box-sizing: content-box; display: grid; grid-template-rows: repeat(2, var(--date-line)); align-content: center; justify-items: center; height: calc(var(--bar-control) - 2 * var(--hair)); padding: 0 var(--u2); border: var(--hair) solid var(--bar-light); border-left: 0; background: none; color: var(--bar-light); font: 600 var(--t-date)/var(--date-line) var(--date-face); font-variant-numeric: tabular-nums; letter-spacing: var(--date-track); }
+  .bar .lead .timebox .date:hover { background: var(--bar-field); }
+  .bar .datepick { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; padding: 0; border: 0; background: none; color: transparent; opacity: 0; pointer-events: none; }
+  /* the date's popup (#402; Okay, 19 Oct 2026: "Date on the black bar is click to edit on popup. Plusminus for both.
+     No controller"): rising from the date's box, in the bar's tones; two lines, the day written out and the time, each
+     between a − and a +, in Barlow Regular ("Try barlow not condensed"). A press on the day opens the system's picker */
+  .bar .datepop { position: absolute; z-index: 7; left: 50%; bottom: calc(100% + var(--u2)); translate: -50% 0; width: max-content; display: grid; gap: var(--u1); padding: var(--u2); border: var(--hair) solid var(--bar-light); border-radius: var(--round-small); background: var(--bar); color: var(--bar-ink); font-family: var(--pop-face); font-size: var(--datepop-type); font-variant-numeric: tabular-nums; white-space: nowrap; box-shadow: var(--shadow); }
+  /* one line: the weekday, then day · month · year, each its word and a boxed arrow over the browser's menu, then − and +
+     side by side (#412). Each part as wide as its widest value, so nothing moves when the date changes ("size fixed, no
+     movements by change in content"): the figures tabular, a word in ch. "Popup larger overall": its type and its
+     steps a size up (--datepop-type, --datepop-step) */
+  .bar .datepop .popline { display: flex; align-items: center; gap: var(--u2); height: var(--datepop-step); }
+  .bar .datepop .popword { color: var(--bar-ink); text-align: center; }
+  .bar .datepop .weekday { width: 3.2ch; text-align: left; }
+  .bar .datepop .popgroup { display: inline-flex; align-items: center; gap: var(--u1); height: 100%; padding-left: var(--u2); border: var(--hair) solid var(--bar-light); }
+  .bar .datepop .popgroup:hover { background: var(--bar-field); }
+  .bar .datepop .pop-day .popword { width: 2ch; }
+  .bar .datepop .pop-month .popword { width: 3.2ch; }
+  .bar .datepop .pop-year .popword { width: 4ch; }
+  .bar .datepop .labelmenu { height: 100%; border-width: 0 0 0 var(--hair); border-color: var(--bar-light); background: none; color: var(--bar-ink); }
+  .bar .datepop .popsteps { display: flex; height: 100%; }
+  .bar .datepop .popstep { display: grid; place-items: center; width: var(--datepop-step); height: 100%; color: var(--bar-ink); border: var(--hair) solid var(--bar-light); }
+  .bar .datepop .popstep + .popstep { border-left: 0; }
+  .bar .datepop .popstep:hover { background: var(--bar-field); }
+  /* NOW: capitals, at AM · PM's size (Okay: "Now uppercase and in pm's font size which grows 1px"); drawn as the bar's
+     other boxes are — the light outline, the word in the same light, the bar's field under a pointer (Okay, 19 Oct 2026,
+     #414: "Why? fill with grey, worst colour") */
+  .bar .lead #now { padding: 0 var(--u3); border-color: var(--bar-light); background: none; color: var(--bar-light); font-size: var(--t-s); text-transform: uppercase; }
+  .bar .lead #now:hover { background: var(--bar-field); }
   .bar .time { width: 100%; text-align: center; }
   .bar .viewing { margin-left: auto; padding: 0 0 0 var(--margin); }      /* at the right; the room the day slider doesn't take lies before it. From its divider to what follows as far as from Fit to the window's right edge: the margin (Okay, 15 Oct 2026, 01:03: "equalize those gaps") */
-  /* how to zoom: words and a faint magnifier, nothing to press. A pointer zooms with ⌘ + scroll, a finger pinches */
-  .bar .zoomhint { display: flex; align-items: center; gap: var(--u2); white-space: nowrap; font-size: var(--t-s); color: var(--bar-light); }
-  @media (hover: none), (pointer: coarse) { .bar .zoomhint { display: none; } }      /* a desktop's only: no sign or words on an iPad or a phone (Okay, 15 Oct 2026, 00:32) */
-  .bar .viewing > button, .bar .zooms { flex: none; width: var(--col); }
-  .bar .fit { display: inline-flex; align-items: center; justify-content: center; gap: var(--u1); }      /* the magnifier, then the word */
-  .bar .fit > span { font-size: var(--t-s); text-transform: uppercase; }      /* FIT, as NOW and AM are set (Okay, 06:21: "is fit alright? It's looking pale": 13 px lower case beside 12 px capitals) */
-  .bar .zooms { display: flex; }
-  .bar .zooms button { flex: 1; min-width: 0; }
-  .bar .zooms button + button { border-left: 0; }
+  /* the zoom area (Okay, 18 Oct 2026, notes 2): the magnifier first, faint, nothing to press but its tag (how to zoom and
+     move, under the pointer; a tap shows it on a touch screen); then − + FIT side by side, sharing their lines — FIT a
+     word button with NOW's room either side (#315). */
+  .bar .zoomsign { display: flex; align-items: center; color: var(--bar-light); cursor: help; }
+  .bar .zooms { flex: none; display: flex; }
+  .bar .zooms > .icon { flex: none; width: calc(var(--col) / 2); }
+  .bar .zooms > .fit { flex: none; padding: 0 var(--u3); font-size: var(--t-s); text-transform: uppercase; }      /* FIT, as NOW and AM are set (Okay, 15 Oct 2026, 06:21: "is fit alright? It's looking pale") */
+  .bar .zooms > button + button { border-left: 0; }
   .bar .status { display: none; }      /* hidden (Okay, 14 Oct 2026, 23:19); app.js still writes it */
 
   /* the day slider is a ruler: a line, cuts crossing it (drawn in draw_ruler, finer on a wider window), and a line
@@ -108,12 +134,16 @@
   .ruler .half { opacity: 0.6; }
   .ruler .small { opacity: 0.38; }
   .ruler .pose { stroke-width: var(--triple); }      /* 10:10 has a thick line of its own, the 10:10 step stands on it (Okay, 15 Oct 2026, 00:51); hidden before */
-  .bar .day input[type="range"] { grid-area: 1 / 1; height: var(--ruler); cursor: ew-resize; }
+  .bar .day { touch-action: none; cursor: ew-resize; }      /* the strip reads presses itself (app.js day_strip): no pan, no swipe */
+  .bar .day input[type="range"] { grid-area: 1 / 1; height: var(--ruler); pointer-events: none; }      /* the keyboard's and a screen reader's way in; presses go to the strip */
+  /* the needle (Okay, 18 Oct 2026, notes 2: "The moving needle is 1px wide and red, starts from the bottom of the screen
+     unlike the ruler which has room below"): placed by app.js (place_needle) from the ruler's top to the bar's foot */
+  .bar .day .needle { position: absolute; z-index: 1; width: var(--hair); translate: -50% 0; background: var(--play); pointer-events: none; }
   .bar .day input[type="range"]::-webkit-slider-runnable-track { height: var(--ruler); border-radius: 0; background: none; }
-  .bar .day input[type="range"]::-webkit-slider-thumb { width: var(--handle); height: var(--ruler); margin-top: 0; border-radius: 0; background: var(--bar-light); box-shadow: 0 0 0 var(--thick) var(--bar); }
+  .bar .day input[type="range"]::-webkit-slider-thumb { width: var(--handle); height: var(--ruler); margin-top: 0; border-radius: 0; background: none; box-shadow: none; }      /* not drawn: the needle stands in its place */
   .bar .day input[type="range"]::-moz-range-track { height: var(--ruler); background: none; }
   .bar .day input[type="range"]::-moz-range-progress { background: none; }
-  .bar .day input[type="range"]::-moz-range-thumb { width: var(--handle); height: var(--ruler); border-radius: 0; background: var(--bar-light); box-shadow: 0 0 0 var(--thick) var(--bar); }
+  .bar .day input[type="range"]::-moz-range-thumb { width: var(--handle); height: var(--ruler); border-radius: 0; background: none; box-shadow: none; }
   .bar .day input[type="range"]:focus-visible { outline: var(--thick) solid var(--bar-light); }
   /* the steps' names: --at = how far along the day (0 to 1); the side margins keep them on the handle's path */
   .steps12 { position: relative; height: var(--names); margin: 0 calc(var(--handle) / 2); }

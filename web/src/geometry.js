@@ -12,10 +12,10 @@
 //               the same engine the Python test harness uses.
 //   HarfBuzz  — the text engine: kerning, OpenType features, variable axes, language.
 
-export const VERSION = "beta 4.46.5";
+export const VERSION = "beta 4.89";
 export const MM = 72 / 25.4;                       // 1 mm in points (files only)
-export const MM_PER_PT = 25.4 / 72;
 
+import { moment, window_text, LANGS as MOMENT_LANGS, NAMES as MOMENT_NAMES } from "./moment.js";      // the complications' engine: one moment, a date and the time (#346, 4.62)
 const { sin, cos, tan, acos, hypot, PI, ceil, abs, min, max, round } = Math;
 const radians = (a) => a * PI / 180;
 const degrees = (a) => a * 180 / PI;
@@ -25,22 +25,36 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 //  1 · SETTINGS
 // ═════════════════════════════════════════════════════════════
 
-export const KINDS = ["ticks", "markers", "numerals", "band"];
+export const KINDS = ["ticks", "markers", "numerals", "band", "text"];      // text: a line of words at every position, with a font of its own (#297, 4.48; appended, R9)
+/** the kinds that draw words through the text pipeline (numeral_at): numerals, and a text ring (#297). */
+export const has_text = (ring) => kind_of(ring) === "numerals" || kind_of(ring) === "text";
 export const SHAPES = ["bar", "wedge", "dot", "file"];
 export const TWELVES = ["same", "double", "triangle", "none"];
 export const SKIP_FROM = ["nothing", "markers above", "markers & numerals above", "all marks above"];
 export const KNOCK_FROM = ["nothing", "markers above", "markers & numerals above", "everything above"];
-const FROM_KINDS = [[], ["markers"], ["markers", "numerals"], ["ticks", "markers", "numerals", "band"]];
+export const FROM_KINDS = [[], ["markers"], ["markers", "numerals", "text"], ["ticks", "markers", "numerals", "band", "text"]];      // a text ring counts with the numerals (#297)
 export const MODES = ["upright", "radial", "radial, auto-flip", "on path"];
-export const ANCHORS = ["centre", "baseline", "ascender"];      // the point of a numeral that sits on its ring's radius (web version, 13 Oct 2026). Only grows at its end (R9)
+export const ANCHORS = ["centre", "baseline", "ascender", "outer edge", "inner edge"];      // the point of a numeral that sits on its ring's radius (web version, 13 Oct 2026). Only grows at its end (R9). The edges (4.53, #338; Okay, 18 Oct 2026: "Tangent to inner or outer"): every numeral's ink touches the radius from inside, or from outside
+export const FROM = ["outer", "middle", "inner"];               // the point of a mark or a band that sits on its ring's radius: its outer end, its middle, its inner end (#257, 4.47). Only grows at its end (R9)
+/** how far a mark's or band's outer edge lies outside the ring's radius: nothing when the radius measures to the outer
+ *  end, half its extent from the middle, all of it from the inner end (#257). extent: the mark's length or the band's width. */
+export const from_shift = (ring, extent) => extent * (ring.from || 0) / 2;
 export const HANDS = ["hour", "minute", "second"];
 export const HAND_SHAPES = ["baton", "pencil", "sword", "dauphine", "leaf", "arrow", "syringe", "breguet", "lollipop", "file", "disc"];      // disc: #164, 14 Oct 2026 (appended, R9)
 export const DATE_AT = [["3", 90], ["4:30", 135], ["6", 180], ["9", 270], ["12", 0], ["1:30", 45], ["7:30", 225], ["10:30", 315], ["4", 120]];      // only grows at its end (R9); 4 added 13 Oct 2026 (Ronda's 4H dial drawing)
-export const WINDOW_KINDS = ["date", "day", "am · pm", "moon phase"];      // what a window shows (web version)
+export const WINDOW_KINDS = ["date", "day", "am · pm", "moon phase", "big date"];      // big date appended (4.74, R9): two square holes, the tens and the units each on a disc of its own      // what a window shows (web version)
 // the hole's shape, apart from what shows through it (Okay, 13 Oct 2026). 0, the start, is "as its kind": an arch for a
 // moon phase, a rectangle for the others — what was drawn before there was a choice (R31). Only grows at its end (R9).
 export const WINDOW_SHAPES = ["as its kind", "rectangle", "circle", "polygon", "arch", "arc"];
-export const window_shape = (w) => WINDOW_SHAPES[w.shape] && w.shape ? WINDOW_SHAPES[w.shape] : (WINDOW_KINDS[w.kind] === "moon phase" ? "arch" : "rectangle");
+export const window_shape = (w) => WINDOW_SHAPES[w.shape] && w.shape ? WINDOW_SHAPES[w.shape]
+  : WINDOW_KINDS[w.kind] === "moon phase" ? (w.look ? "circle" : "arch") : WINDOW_KINDS[w.kind] === "am · pm" ? "half"
+  : WINDOW_KINDS[w.kind] === "big date" ? "pair" : "rectangle";      // a big date: two square holes side by side (4.74)      // a moon's Phase and Line sit in a round hole, an am · pm Half in a half-round one (4.73)      // a moon's Phase and Line pictures sit in a round hole (4.73)
+// what a moon window pictures (4.73, #346; the disc sketches B and C, Okay, 18 Oct 2026: "All are good"): Arch (the
+// humps) · Phase (the moon as it is lit, in three colours) · Line (its outline and dark side, one ink). An am · pm
+// window has one picture: a disc, half am and half pm, under a half-round hole (Okay, 19 Oct 2026: "Am pm should be
+// one half of a circle each"); its three former pictures keep their places here (R9) but `look` is not read for it
+// (link scheme 3, R31). Only grows at its end (R9)
+export const PICTURES = { "moon phase": ["Arch", "Phase", "Line"], "am · pm": ["Sky", "Half", "Band"] };
 export const LANGS = ["default", "tr", "nl", "de", "pl", "ro", "ca", "ar", "fa", "zh-Hans", "ja"];
 export const BEATS = [["sweep", 0], ["quartz · 1/s", 1], ["6 beats/s", 6], ["8 beats/s", 8]];
 export const LABEL_SETS = [                        // popups store the index (R9): only ever append
@@ -70,6 +84,7 @@ export const RING_BASE = {
   num_again: 0,                                    // Numbers: the count starts again after this many positions (0 = never), as on Ferguson's dial or a two-hour track (13 Oct 2026)
   guide: -1,                                       // its guide's colour (preview only, R5): a place in GUIDE_COLOURS · -1 = one by its place in the list (ring_guide) · -2 = none (13 Oct 2026)
   anchor: 0,                                       // numerals: what the radius measures to, a place in ANCHORS. 0 = the text's centre, as before (R31)
+  from: 0,                                         // ticks, markers, bands: what the radius measures to, a place in FROM — the mark's or band's outer end, its middle, or its inner end (Okay's notes, p. 9, #257: "resize from"). Starting at outer, every link draws as before (R31)
   cs: {},                                          // a band's sectors with a colour of their own: position → RGBA. Empty = all in the ring's colour (beta 4.6)
 };
 export const TYPE_KEYS = ["family", "ps", "size", "tracking", "lang", "axes", "features"];
@@ -79,6 +94,11 @@ export const HAND_BASE = {
   on: true, shape: 0, file: "", fit: true, scale: 1.0, w_scale: 1.0,
   len: 10.0, w: 1.0, tail: 1.0, tip: 1.0, feature: 1.2, feature_at: 75.0,
   counter: 0.0, wall: 0.0, round: 0.0, c: [0.10, 0.10, 0.12, 1],
+  // (4.80, #370, #368; Okay, 19 Oct 2026: "These hands need a disc to attach to the mechanism … a ball that the leaf
+  // attaches to"; "centre buttons on preview allowed to go up/down to adjust eg where the leaf bulges"): hub — the
+  // round boss the hand sits on at the pivot, its Ø (0: none, as every hand before 4.80; a disc hand has none) ·
+  // bulge — where a leaf is widest, its two curves' middle as a share of the length (37.5: the leaf as it always was)
+  hub: 0.0, bulge: 37.5,
   // a disc hand (#164, 14 Oct 2026; Okay: "disk just gets a marker now… one marker as the arrow"): a disc of Ø disc_d
   // on the pivot, carrying one marker drawn as a markers ring draws its marks — mark: a place in SHAPES (bar · wedge ·
   // dot), mark_len · mark_w its length and width — with its outer end at the hand's Length. Used only by shape "disc"
@@ -86,6 +106,10 @@ export const HAND_BASE = {
   // the marker as a hole or a mark (#300, beta 4.45.4; Okay, 16 Oct 2026: "Mark if also possible easily"): mark_as 0 —
   // cut out of the disc (the dial shows through), as before; 1 — painted on it, whole, in mark_c
   mark_as: 0, mark_c: [1, 1, 1, 1],
+  // the window kept inside the disc (#344; Okay, 18 Oct 2026: "Window is always inside disc hands, constrain" — "Off in
+  // old links for window"): its outer end at the hand's Length, or at the disc's edge if Length reaches past it. Off to
+  // start, as every older dial was drawn (R31: no new scheme); a hand made a disc in the tool turns it on (app.js)
+  mark_in: false,
 };
 
 // windows 2 to 4 (web version, beta 3.0). Window 1 is the date window both tools know: its keys are da_….
@@ -103,10 +127,17 @@ export const WINDOW_BASE = {
   features: null,                                  // its own OpenType features (beta 4.30); null = none of its own. axes: {} likewise
   at_deg: null,                                    // a place of its own, in clock degrees (beta 4.34); null = the named place, at
   guide: -1,                                       // its guide's colour, as a ring's (#271): a place in GUIDE_COLOURS · -1 = by its place (window_guide) · -2 = none
+  follows: true,                                   // a date, day or moon window shows the bar's date; on to start, and for every link (Okay, 19 Oct 2026, 21:09, #413: "All on by default", for old links too)
+  names: 0,                                        // a day window following the date: its names' language, a place in moment.js LANGS (EN · TR · DE · FR · IT; 4.62)
+  neighbours: true,                               // a date or day window shows its disc's places either side of the shown one, where the hole lets them (4.74; the disc sketch D1), in c2
+  look: 0,                                         // its picture, a place in PICTURES[its kind] (4.73); 0 = as before
+  c2: null, c3: null,                              // its picture's further colours (4.73): a moon's shade · an am · pm half's sun and moon · a band's dawn and dusk; null = the picture's own (PICTURE_TONES)
+  physics: true,                                   // its disc stays inside the case (4.72, #346): passing it, its guide shows red and the panel says so; off for a face on a screen, where a disc may be bigger than the dial
+  wh_link: false,                                  // width and height linked: one changed, the other keeps their ratio (#358, beta 4.57); off, so every link draws and behaves as before
 };
 const FIRST_WINDOW = { on: "da_on", kind: "da_kind", at: "da_at", r: "da_r", w: "da_w", h: "da_h", round: "da_round", frame: "da_frame",
   clear: "da_clear", text: "da_day", size: "da_size", ink: "da_ink", hour: "da_hour", age: "da_age",
-  shape: "da_shape", sides: "da_sides", turn: "da_turn", text_turn: "da_text_turn", family: "da_family", ps: "da_ps", axes: "da_axes", text_c: "da_text_c", disc_c: "da_disc_c", guide: "da_guide", tracking: "da_tracking", lang: "da_lang", features: "da_features", at_deg: "da_at_deg" };
+  shape: "da_shape", sides: "da_sides", turn: "da_turn", text_turn: "da_text_turn", family: "da_family", ps: "da_ps", axes: "da_axes", text_c: "da_text_c", disc_c: "da_disc_c", guide: "da_guide", tracking: "da_tracking", lang: "da_lang", features: "da_features", at_deg: "da_at_deg", wh_link: "da_wh_link", follows: "da_follows", names: "da_names", physics: "da_physics", look: "da_look", c2: "da_c2", c3: "da_c3", neighbours: "da_neighbours" };
 
 export const DEFAULTS = {
   version: 2,
@@ -122,6 +153,7 @@ export const DEFAULTS = {
   da_shape: 0, da_sides: 6, da_turn: false, da_text_turn: true, da_family: "", da_ps: "", da_axes: {}, da_text_c: null, da_disc_c: null, da_tracking: null, da_lang: null, da_features: null, da_at_deg: null,      // window 1's share of WINDOW_BASE's keys of 13 Oct 2026
   t: 10 * 3600 + 9 * 60 + 36,
   out_production: false, out_mirror: false, out_live_text: false,
+  out_paper: 0, out_copies: 0, out_gap: 3.0, out_cutline: false,      // a print sheet (4.75, #348): its paper (output.js PAPERS: A4 · Letter · A5), how many (0 = as many as fit), the room between, a cut line round each
   out_dpi: 600.0, out_seconds: 4.0, out_fps: 30.0, out_px: 1080,
   ui_section: 0, ui_ring: 0, ui_hand: 0, ui_preview: 0, ui_window: 0,
   ui_unit: 0,                                      // the unit lengths are shown and typed in: a place in UNITS. Settings stay in mm (R1)
@@ -137,9 +169,16 @@ export const DEFAULTS = {
   gd_hole: true, gd_k_hole: 1,                    // the centre hole's own guide, first in the list (Okay, 16 Oct 2026, #267)
   gd_wins: false, gd_wsel: true,                  // which windows show their guides: all · the chosen one (to start) · none, as rings (#271). gd_win, gd_k_win (the windows' radii) unread since
   da_guide: -1,                                   // the first window's guide colour, as every window's `guide` (#271)
+  da_follows: true, da_names: 0,                   // the first window's `follows` and `names`: following the bar's date to start (#413)
+  wearos_name: "",                                 // a Wear OS watch face's name (4.67, farukahmet's PR #1); "" = Dial Tool. Its package's name follows from it
+  strap: 1, c_strap: [0.29, 0.2, 0.14, 1],      // its strap (4.69, bezels.js STRAPS): 0 none, 1 a leather strap in c_strap, 2 a metal bracelet in the case's metal. Shown only with a case
+  bezel: 0,                                        // a case round the dial on the preview (4.66, bezels.js BEZELS): 0 none, 1 diver, 2 pilot, 3 dress, 4 sport. Preview only, like the backdrop (R26)
+  date: "",                                        // the day the dial shows, "2026-10-18", set in the bar (4.62; Okay, 18 Oct 2026: "Date best set at the bar … Default from system date"); "" = today, wherever the dial is opened
+  da_look: 0, da_c2: null, da_c3: null, da_neighbours: true,      // … and `neighbours` (4.74)            // the first window's `look`, `c2`, `c3` (4.73)
+  da_physics: true, xray: false,                   // the first window's `physics` · X-ray, every window's disc seen under a veil of the plate, preview only (4.72, #346)
+  da_wh_link: false,                               // the first window's width and height linked, as every window's `wh_link` (#358, beta 4.57)
   gd_k_edge: 1, gd_k_axes: 0, gd_k_win: 1, gd_k_rings: 1, gd_k_sel: 4, gd_w: 1.0,
-  // shadows: preview only, never in a file (R5). A trial on branch try/shadows (Okay, 14 Oct 2026: "dummy preview
-  // only, do not do this on the live page yet"). One light, far away: it comes from a clock angle (sh_from, degrees)
+  // shadows: preview only, never in a file (R5, R26). One light, far away: it comes from a clock angle (sh_from, degrees)
   // at a height over the dial (sh_rise, degrees above the plate's face). Each hand floats at its own height over the
   // plate (mm); the cap's top is the top of the stack; the date discs lie sh_disc mm under the plate's face. A thing
   // of height z casts its shape shifted by z / tan(rise), away from the light, onto everything lower; each surface
@@ -148,10 +187,10 @@ export const DEFAULTS = {
   // 2026, 23:05, a picture of the list: "these in the image are the default values"); the movement, not chosen yet,
   // will fix the real heights.
   sh_on: true, sh_from: 270, sh_rise: 35, sh_dark: 25, sh_blur: false,
+  sh_bevel: 0,                                     // the hands' bevels, 0–100 % (4.79; Okay, 19 Oct 2026: "Hand bevel off on default, add an adjuster"); 100 = as 4.77 drew them
   sh_hour: 0.15, sh_minute: 0.35, sh_second: 0.6, sh_cap: 0.75, sh_disc: 0.15,
-  gd_more: [],                                     // guides added by hand: lines, crosshairs, circles (GUIDE_MORE). gd_k_rings and gd_k_sel: unread since 13 Oct 2026, a ring's guide has the ring's own colour
-  // until beta 4.4 guides had two free colours with a strength each. Kept because old links and files carry
-  // them (R8, R31); nothing reads them now.
+  gd_more: [],                                     // guides added by hand: lines, crosshairs, circles (GUIDE_MORE). gd_k_rings and gd_k_sel: unread, a ring's guide has the ring's own colour
+  // the next five keys are unread: old settings files carry them (R8). Nothing writes them any more.
   gd_c: [0.0, 0.55, 0.9, 1], gd_strength: 50.0,
   gd_sel_c: [1.0, 0.45, 0.0, 1], gd_sel_strength: 95.0, gd_sel_w: 1.5,
 };
@@ -163,6 +202,7 @@ export const UNITS = [["mm", "Millimetres", 1, 0], ["pt", "Points", 72 / 25.4, 0
   ["thou", "Thou", 1 / 0.0254, -1]];      // thou: a thousandth of an inch (Okay, 16 Oct 2026, #299); one decimal fewer than mm. Only grows at its end (R9)
 
 /** the eight colours a guide can have: six neons, a dark and a light (Okay, 12 Oct 2026). The list only grows at its end (R9). */
+export const DISC_WARN = [0.9, 0.22, 0.17];        // a disc past the case, with physics on: its edge in red (A4)
 export const GUIDE_COLOURS = ["#FF2D95", "#00E5FF", "#39FF14", "#FFE600", "#FF6A00", "#7A5CFF", "#111111", "#FFFFFF"];
 /** the five kinds of guide: [key of its eye, key of its colour, name]. */
 export const GUIDE_KINDS = [["gd_edge", "gd_k_edge", "Dial edge"], ["gd_axes", "gd_k_axes", "Centre lines"], ["gd_win", "gd_k_win", "Window radii"],
@@ -200,7 +240,7 @@ export function radial_extent(path) {
  *  · k: a place in GUIDE_COLOURS, -2 = none. line: a diameter at angle a · crosshair: a small cross at angle a and
  *  radius r, to mark a point · circle: radius r. The list only grows at its end (R9). */
 export const GUIDE_MORE = ["line", "crosshair", "circle"];
-export const NOT_GEOMETRY = ["t", "guides", "ui_section", "ui_ring", "ui_hand", "ui_window", "ui_preview", "ui_scale", "ui_unit"];
+export const NOT_GEOMETRY = ["t", "guides", "xray", "bezel", "strap", "c_strap", "wearos_name", "ui_section", "ui_ring", "ui_hand", "ui_window", "ui_preview", "ui_scale", "ui_unit"];
 export const NOT_GEOMETRY_PREFIX = ["c_", "ha_", "out_", "gd_", "sh_"];
 
 /** base values + d's values (deep copies), names turned into popup indexes. */
@@ -219,6 +259,7 @@ const KIND_START = {                               // a new ring, sized for a di
   markers: (R) => ({ r: R - 1.6, count: 12, len: 2.8, w: 0.7 }),
   numerals: (R) => ({ r: round(R * 0.67 * 100) / 100, count: 12 }),
   band: (R) => ({ r: R, count: 1, width: 1.0, c: ACCENT }),
+  text: (R) => ({ r: round(R * 0.35 * 100) / 100, count: 1, start: 180, custom: "AUTOMATIC", size: 1.2 }),      // one word under the centre, as a dial's remark (#297)
 };
 
 /** a fresh ring; numerals copy the type of `like` (another numerals ring). */
@@ -350,15 +391,16 @@ export function fresh_settings(over = null) {
 //   scheme is not read: the tool opens the First dial and says so.
 //   Scheme 2 (beta 4.43, #278 and #246's lossless parts): the lean settings, every key written as its code from
 //   LINK_KEYS, colours as hex, numbers to 3 decimals, the time to the second → JSON → deflate → Crockford's base 32
-//   (capitals and digits, no I L O U), after "2". Scheme 1 (until 4.42.5) was base 64 after "1."; it is not read.
+//   (capitals and digits, no I L O U), after the scheme's number. Scheme 3 (beta 4.88): the same writing, after "3";
+//   it went up because an am · pm window now draws its one disc whatever its old `look`, so a scheme-2 link with the
+//   Sky or Band picture would draw something else. Links of schemes 1 and 2 are not read (R31).
 
-export const LINK_SCHEME = 2;
+export const LINK_SCHEME = 3;      // 3 since 4.88: an am · pm window draws its one disc whatever its old `look` (R31)
 
 /** the topmost hand that shows: its place in HANDS, or -1 */
 export const top_hand = (S) => [2, 1, 0].find((i) => S["ha_" + HANDS[i]].on) ?? -1;
 /** the cap is part of the seconds hand (#262, beta 4.43): drawn with it; with no seconds hand, on the topmost hand
- *  only when asked (ha_cap_top). Until 4.43 it was drawn whatever the hands — a scheme-1 dial with no seconds hand
- *  loses its cap, one reason for scheme 2 (R31). */
+ *  only when asked (ha_cap_top). */
 export const cap_shows = (S) => S.ha_on && S.ha_cap > 0 && (S.ha_second.on || (S.ha_cap_top && top_hand(S) >= 0));
 
 // A key's code is its place in this list, written with CODE_DIGITS (one letter for the first 62, then two). The
@@ -383,6 +425,23 @@ export const LINK_KEYS = [
   "twelve_scale", "lang", "fill", "num_again", "anchor", "fit", "w_scale", "mark", "hour", "age", "sides", "turn",
   "text_turn", "at_deg", "a", "k", "ha_cap_top",
   "mark_as", "mark_c",      // 4.45.4 (#300): appended; starting as a hole, so every scheme-2 link draws as before
+  "from",                   // 4.47 (#257): appended; starting at the outer end, as always, so every scheme-2 link draws as before
+  "mark_in",                // 4.52.2 (#344): appended; off to start, so every scheme-2 link draws as before
+  "wh_link", "da_wh_link",  // 4.57 (#358): appended; off to start, and they draw nothing: only how W and H move together
+  "follows", "names", "da_follows", "da_names", "date",      // 4.62: appended; a window follows the bar's date only when asked, so every older link shows its typed text
+  "bezel",                  // 4.66: appended; no case to start, so every older link looks as before
+  "wearos_name",            // 4.67: appended; empty to start
+  "out_paper", "out_copies", "out_gap", "out_cutline",      // 4.75: appended; a print sheet's settings
+  "neighbours", "da_neighbours",      // 4.74: appended; off to start, so every older link looks as before
+  "look", "c2", "c3", "da_look", "da_c2", "da_c3",      // 4.73: appended; the picture as before (0) and its own colours (null), so every older link looks as before
+  "xray", "physics", "da_physics",      // 4.72: appended; X-ray off and physics on to start, so every older link looks as before
+  "strap", "c_strap",       // 4.69: appended; a case's strap — drawn only with a case, which older links don't have
+  // ↑ 4.72–4.75 put their keys above 4.69's instead of under them, so each moved the codes of the ones before it: a
+  // link made in 4.69–4.74 with a case's strap, X-ray, a window's picture or neighbours reads those wrongly since
+  // (found 19 Oct 2026, 4.79). The order above is 4.75–4.78's, kept as it is, since the live page and saved dials
+  // (#347) carry it. From here on: only ever under the last line, and test/link-keys.json says so (linktrip.mjs).
+  "sh_bevel",               // 4.79: appended; off to start
+  "hub", "bulge",           // 4.80: appended; no hub and the leaf as always to start, so every older link looks as before
 ];
 const CODE_DIGITS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const code_of = (i) => (i < 62 ? CODE_DIGITS[i] : CODE_DIGITS[Math.floor(i / 62) - 1] + CODE_DIGITS[i % 62]);
@@ -462,7 +521,7 @@ export function un_base32(text) {
 /** what the part after # is: a scheme-2 dial's letters, a link of an older scheme, or not a dial at all. */
 export function link_kind(hash) {
   const h = (hash || "").replace(/^#/, "");
-  if (/^2[0-9A-Za-z]+$/.test(h)) return { scheme: 2, letters: h.slice(1) };
+  if (/^[23][0-9A-Za-z]+$/.test(h)) return { scheme: +h[0], letters: h.slice(1) };      // schemes 2 and 3: the same writing after their number
   if (/^[01]\.[A-Za-z0-9_~-]+$/.test(h)) return { scheme: +h[0] };
   return null;
 }
@@ -976,18 +1035,27 @@ function mark_outline(ring, L, W, shape = null, taper = null, grow = 0, solid = 
   return p;
 }
 
-/** the mark at position i: its outer end on the ring's radius. */
+/** the mark at position i: its outer end on the ring's radius — or its middle, or its inner end (ring.from, #257). */
 function mark_at(ring, i, a, grow = 0, solid = false) {
   const first = kind_of(ring) === "markers" && i === 0;
   const style = first ? TWELVES[ring.twelve] : "same";
   if (style === "none") return null;
-  const k = first ? ring.twelve_scale : 1;
+  // a mark's own nudge, as a numeral's (#349, groundwork for editing one mark; Okay, 18 Oct 2026, notes 2: "Each individual
+  // marker could be selected and edited"): radius ±, angle ±, size ×, turn — stored per position in the ring's `nudge`
+  const n = (ring.nudge && ring.nudge[String(i)]) || {};
+  const k = (first ? ring.twelve_scale : 1) * (n.s ?? 1);
   const L = ring.len * k, W = ring.w * k;
-  const shape = style === "triangle" ? mark_outline(ring, L * 1.1, W * 2.4, "wedge", 0, grow, solid) : mark_outline(ring, L, W, null, null, grow, solid);
+  // its own shape (4.78, #349: "a tick can grow or become anything else … a wedge"): nudge.shape, a place in SHAPES
+  // after "as the ring" (0); a mark of its own shape keeps the ring's length, width and rounding
+  const own = n.shape > 0 && SHAPES[n.shape - 1] && SHAPES[n.shape - 1] !== "file" ? SHAPES[n.shape - 1] : null;
+  const shape = own ? mark_outline(ring, L, W, own, own === "wedge" ? 0 : null, grow, solid)
+    : style === "triangle" ? mark_outline(ring, L * 1.1, W * 2.4, "wedge", 0, grow, solid) : mark_outline(ring, L, W, null, null, grow, solid);
   const b = shape.bounds();
   if (!b) return null;
+  if (n.rot) shape.rotate(-n.rot, [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]);
+  if (n.da) a += n.da;
   const extent = (b[3] - b[1]) - 2 * grow, width = (b[2] - b[0]) - 2 * grow;
-  const r_mid = max(ring.r - extent / 2, 0.1);
+  const r_mid = max(ring.r + (n.dr || 0) + from_shift(ring, extent) - extent / 2, 0.1);
   if (style === "double") {
     const da = degrees((ring.twelve_gap + width) / 2 / r_mid);
     return merge([place(shape.copy(), r_mid, a - da), place(shape, r_mid, a + da)]);
@@ -1005,6 +1073,7 @@ function number_label(v, digits) {
 /** one label per position. */
 export function ring_labels(ring) {
   const n = max(parseInt(ring.count) || 1, 1);
+  if (kind_of(ring) === "text") return Array.from({ length: n }, () => ring.custom || "");      // a text ring says its words at every position (#297)
   const [name, txt] = LABEL_SETS[ring.labels];
   if (name === "Custom") {
     const parts = ring.custom.split(",").map((s) => s.trim());
@@ -1048,22 +1117,36 @@ function on_path(txt, r, a, t, size) {
   return merge(out);
 }
 
-/** the top of a numerals ring's labels above their baseline, at the ring's size: the tallest label decides, so
- *  every numeral of the ring hangs from one line (figures: their height; words: their ascenders). */
-function ring_top(ring) {
-  return memo("top" + JSON.stringify([ring_labels(ring), TYPE_KEYS.map((k) => ring[k])]), () =>
-    max(0, ...ring_labels(ring).filter(Boolean).map((txt) => { const b = text_path(txt, ring, ring.size).bounds(); return b ? b[3] : 0; })));
-}
-
-/** how far a numeral's outlines move up or down in their own space (baseline at 0, y up) so that the ring's
- *  anchor lands on the origin, which is then put on the radius: its centre (as always until now), its baseline,
- *  or its top. Sideways a numeral is always centred. */
+/** how far a numeral's outlines move up or down in their own space (baseline at 0, y up) so that its centre lands
+ *  on the origin, which is then put on the radius (the edges add their shift in tangent_shift). Sideways a numeral is
+ *  always centred. */
 function numeral_dy(ring, txt, size) {
-  const anchor = ANCHORS[ring.anchor] || "centre";
-  if (anchor === "baseline") return 0;
-  if (anchor === "ascender") return -ring_top(ring) * size / (ring.size || 1);
+  // baseline and ascender are retired (Okay, 19 Oct 2026, #418: "Remove these two from the functions as well"):
+  // their places in ANCHORS stay (R9) and a ring stored with one measures to the centre
   const b = text_path(txt, ring, size).bounds();
   return b ? -(b[1] + b[3]) / 2 : 0;
+}
+
+/** the radius that keeps the drawing still when what it measures to changes (#326; Okay, 18 Oct 2026: "Nothing changed …
+ *  just the dotted line moves", and "My comment applies to reverse auto reverse"): marks and bands keep their outer edge
+ *  (resize from: outer · middle · inner); numerals keep the middle of the label at the first position — exact for numerals
+ *  turned with the ring (radial, auto-flip), whose anchors all lie on one line through the middle; for upright ones it
+ *  holds the first label still. → the new radius for `ring` (as it is now) measured to `to`. */
+export function radius_kept(ring, key, to) {
+  if (key === "from") {
+    const extent = kind_of(ring) === "band" ? ring.width : ring.len;
+    return max(ring.r + extent * ((ring.from || 0) - to) / 2, 0);
+  }
+  const label = ring_labels(ring).find(Boolean);
+  if (!label) return ring.r;
+  const mode = MODES[ring.mode], a = ring.start || 0, size = ring.size;
+  const middle = (anchor) => {      // the label's middle, as a distance from the centre, with the ring measured to `anchor`
+    const R = { ...ring, anchor }, b = text_path(label, R, size).bounds();
+    const up = b ? numeral_dy(R, label, size) + (b[1] + b[3]) / 2 : 0;      // how far the middle stands above the radius, in the numeral's own up
+    const out = mode === "upright" ? up * cos(a * PI / 180) : mode === "on path" ? 0 : up * (mode === "radial, auto-flip" && a % 360 > 90 && a % 360 < 270 ? -1 : 1);
+    return ring.r + out + (mode === "on path" ? 0 : tangent_shift(R, mode, a, label, size));
+  };
+  return max(ring.r + middle(ring.anchor || 0) - middle(to), 0);
 }
 
 /** placement, radius, angle, size and rotation of the numeral at position i, nudge included. */
@@ -1072,8 +1155,22 @@ function numeral_setup(ring, i, a) {
   return [MODES[ring.mode], ring.r + (n.dr || 0), a + (n.da || 0), ring.size * (n.s ?? 1), n.rot || 0];
 }
 
+/** how far a numeral's middle stands from the radius when the ring is tangent (#338): its ink's reach toward the dial's
+ *  edge — the box's corner in that direction for an upright numeral, half its height for one turned with the ring.
+ *  → 0 for the other anchors. Outer edge: inward (−), inner edge: outward (+). */
+function tangent_shift(ring, mode, a, label, size) {
+  const anchor = ANCHORS[ring.anchor];
+  if (anchor !== "outer edge" && anchor !== "inner edge") return 0;
+  const b = text_path(label, ring, size).bounds();
+  if (!b) return 0;
+  const w = b[2] - b[0], h = b[3] - b[1], t = a * PI / 180;
+  const reach = mode === "upright" ? abs(sin(t)) * w / 2 + abs(cos(t)) * h / 2 : h / 2;
+  return anchor === "outer edge" ? -reach : reach;
+}
+
 function numeral_at(ring, i, a0, label) {
-  const [mode, r, a, size, rot] = numeral_setup(ring, i, a0);
+  const [mode, r0, a, size, rot] = numeral_setup(ring, i, a0);
+  const r = mode === "on path" ? r0 : r0 + tangent_shift(ring, mode, a, label, size);
   if (mode === "on path") {
     const p = on_path(label, r, a, ring, size);
     if (rot) p.rotate(-rot, clock_point(r, a));
@@ -1125,7 +1222,7 @@ function numeral_live(ring, i, a0, label) {
  *  and the windows' clear zones cut away from the outlines; live text can't be cut, so a file
  *  hides that area with a clipping mask. */
 export function live_texts(S, statik, item) {
-  if (item.role === "ring" && item.ring.kind === "numerals") {
+  if (item.role === "ring" && has_text(item.ring.ring)) {
     const d = item.ring, ring = d.ring, angles = ring_angles(ring), labels = ring_labels(ring);
     const removed = d.path !== d.shape ? d.shape.difference(d.path) : null;
     return { texts: d.keep.filter((i) => labels[i]).flatMap((i) => numeral_live(ring, i, angles[i], labels[i])), removed: removed && !empty(removed) ? removed : null };
@@ -1133,8 +1230,7 @@ export function live_texts(S, statik, item) {
   if (item.role === "date number") {
     const x = statik.windows.find((w) => w.index === item.window);
     if (!x || !["date", "day"].includes(WINDOW_KINDS[x.w.kind]) || window_shape(x.w) === "arc") return null;      // bent text (#166) stays outlines
-    const shape = window_shape(x.w), high = shape === "rectangle" || shape === "arc" ? x.w.h : shape === "arch" ? x.w.w / 2 : x.w.w;
-    const t = window_type(S, x.w), size = high * x.w.size / 100, c = text_centre(x.w.text, t, size);
+    const t = window_type(S, x.w), size = text_room(x.w) * x.w.size / 100, c = text_centre(x.w.text, t, size);
     if (!c) return null;
     const turn = x.w.text_turn ? window_turn(x.w) : 0;
     return { texts: [{ txt: x.w.text, t, size, fill: x.w.text_c || x.w.ink, at: [-c[0], -c[1]], steps: [["t", ...clock_point(x.w.r, window_angle(x.w))], ...(turn ? [["r", -turn, 0, 0]] : [])] }], removed: null };
@@ -1157,7 +1253,7 @@ function ring_shapes(ring, keep, grow = 0, solid = false) {
       }
       return [merge(parts).removeOverlap(), taken, at, parts];
     }
-    if (kind === "numerals") {
+    if (kind === "numerals" || kind === "text") {
       const labels = ring_labels(ring);
       for (const i of keep) {
         if (labels[i]) { parts.push(numeral_at(ring, i, angles[i], labels[i])); taken.push(angles[i]); at.push(i); }
@@ -1165,7 +1261,8 @@ function ring_shapes(ring, keep, grow = 0, solid = false) {
     } else {                                       // band
       const n = max(parseInt(ring.count) || 1, 1);
       const length = ring.span / n * min(max(ring.fill, 0), 100) / 100;
-      for (const i of keep) { parts.push(sector(ring.r - ring.width, ring.r, angles[i], angles[i] + length)); at.push(i); }
+      const outer = ring.r + from_shift(ring, ring.width);      // the radius measures to the band's outer edge, its middle or its inner edge (#257)
+      for (const i of keep) { parts.push(sector(outer - ring.width, outer, angles[i], angles[i] + length)); at.push(i); }
     }
     const out = merge(parts);
     return [grow ? offset(out, grow) : out, taken, at, parts];
@@ -1204,7 +1301,7 @@ function build_rings(S, cut = null) {
     if (!ring.on) continue;
     const kind = kind_of(ring), angles = ring_angles(ring);
     let keep = angles.map((_, i) => i).filter((i) => picked(ring, i));
-    if (kind === "markers" || kind === "numerals") keep = keep.filter((i) => !holes.some((a) => near(angles[i], a)));
+    if (kind === "markers" || kind === "numerals" || kind === "text") keep = keep.filter((i) => !holes.some((a) => near(angles[i], a)));
     if (ring.skip) {
       const taken = done.filter((d) => FROM_KINDS[ring.skip].includes(d.kind)).flatMap((d) => d.taken);
       keep = keep.filter((i) => !taken.some((a) => near(angles[i], a, 0.01)));
@@ -1280,6 +1377,56 @@ function moon_parts(w, age) {
   return { opening, moon, stars };
 }
 
+/** the moon as it is lit at an age (days), a disc of radius rm round the origin: {disc, lit, dark}. Waxing the right
+ *  side is lit, waning the left (as seen from the north); the terminator is half an ellipse, as wide as the cosine of
+ *  the phase angle (4.73). */
+function moon_lit(rm, age) {
+  const f = (((age % SYNODIC_DAYS) + SYNODIC_DAYS) % SYNODIC_DAYS) / SYNODIC_DAYS, c = cos(2 * PI * f), wx = Math.max(Math.abs(c) * rm, 0.001);
+  const disc = circle(2 * rm), half = disc.intersection(new Path().rect(0, -rm - 1, rm + 1, 2 * rm + 2));
+  const ell = new Path().oval(-wx, -rm, 2 * wx, 2 * rm);
+  let lit = c > 0 ? half.difference(ell) : half.union(ell);
+  if (f > 0.5) lit = lit.scale(-1, 1);
+  return { disc, lit, dark: disc.difference(lit) };
+}
+const SYNODIC_DAYS = 29.530588853;
+/** an am · pm window's disc, for a hole w wide: two plain halves, pm in the picture's colour and am the disc's
+ *  (Okay, 19 Oct 2026: "one half of a circle each … minimalize inside graphics"). It turns on the hole's flat side,
+ *  (0, -w/4), once a day: at hour 0 the pm half fills the hole, at 12 the am half. → {night (the pm half), r} */
+function half_disc(w, hour) {
+  const R = w / 2, pivot = [0, -w / 4], turn = (((hour % 24) + 24) % 24) / 24 * 360;
+  const night = sector(0, R + DISC_PAD, -90, 90).rotate(-turn).translate(...pivot);
+  return { night, r: R };
+}
+/** the room a date or day window's text is sized from (its Size % of it): the hole's height (rectangle, arc), half an
+ *  arch's width, a round hole's Ø. With its neighbours showing (4.74), no more than the disc's step from one place to
+ *  the next — a hole made tall to show them keeps the shown date its size. */
+function text_room(w) {
+  const shape = window_shape(w), high = shape === "rectangle" || shape === "arc" ? w.h : shape === "arch" ? w.w / 2 : w.w;
+  if (!w.neighbours) return high;
+  const n = WINDOW_KINDS[w.kind] === "day" ? 7 : 31;
+  return Math.min(high, 2 * PI * w.r / n);
+}
+/** a big date's gap between its two holes: an eighth of its width. */
+const pair_gap = (w) => w.w / 8;
+/** a date or day window's disc, place by place (4.72, 4.74): the places it carries, the one shown, and any place p's
+ *  print in the dial's space — as the window prints its own, turned (p − now) steps clockwise round the dial's centre. */
+function disc_places(S, w) {
+  const kind = WINDOW_KINDS[w.kind], shape = window_shape(w), high = text_room(w);
+  const lang = MOMENT_LANGS[w.names] || "en";
+  const list = kind === "date" ? Array.from({ length: 31 }, (_, i) => String(i + 1))
+    : (MOMENT_NAMES[w.follows ? lang : (MOMENT_LANGS.find((l) => MOMENT_NAMES[l].days.includes(w.text)) || "en")]).days;
+  const now = Math.max(list.indexOf(kind === "date" ? String(parseInt(w.text, 10)) : String(w.text)), 0), n = list.length;      // "07" is the 7th
+  const type = window_type(S, w), size = high * w.size / 100, centre = clock_point(w.r, window_angle(w)), turn = window_turn(w), a = window_angle(w);
+  const at = (p) => {
+    const t = list[((p % n) + n) % n], one = shape === "arc" ? on_path(t, w.r, a, type, size)
+      : (turn && w.text_turn ? centred(text_path(t, type, size)).rotate(-turn) : centred(text_path(t, type, size))).translate(...centre);
+    return one.rotate(-(p - now) * 360 / n);
+  };
+  return { list, now, n, at, key: JSON.stringify([kind, list, now, w.r, w.at, w.at_deg, w.turn, w.text_turn, shape, size, type]) };
+}
+/** a picture's colours not set by the person (4.73): the moon's shade (light, dawn and dusk belonged to the am · pm pictures retired in 4.88; kept, R9). */
+export const PICTURE_TONES = { near: [0.62, 0.62, 0.6, 1], shade: [0.5, 0.5, 0.52, 1], light: [0.95, 0.86, 0.6, 1], dawn: [0.91, 0.65, 0.71, 1], dusk: [0.91, 0.59, 0.35, 1] };
+
 /** a window's hole, in its own space (centre at the origin, upright), and the same hole grown by d all round.
  *  rectangle: width × height, corners rounded · circle: Ø = width · polygon: sides, inscribed in Ø = width, a flat
  *  side down, corners rounded · arch: the moon's, from its width · arc: a piece of a ring through the window's
@@ -1307,27 +1454,40 @@ function window_hole(w) {
     };
     return [make(0), make];
   }
+  if (shape === "pair") {                          // a big date's two square holes side by side, as wide as the window together, a gap between (4.74)
+    const gap = pair_gap(w), cw = (w.w - gap) / 2, dx = (cw + gap) / 2;
+    const make = (d) => rounded_rect(cw + 2 * d, w.h + 2 * d, w.round + d).translate(-dx, 0).union(rounded_rect(cw + 2 * d, w.h + 2 * d, w.round + d).translate(dx, 0));
+    return [make(0), make];
+  }
+  if (shape === "half") {                          // half a circle, its flat side down, as wide as the window (an am · pm Half, 4.73); its middle on the window's place
+    const make = (d) => circle(w.w + 2 * d).intersection(new Path().rect(-w.w, -d, 2 * w.w, w.w)).translate(0, -w.w / 4);
+    return [make(0), make];
+  }
   const hole = moon_parts(w.w, 0).opening;         // the arch: its humps are hollow, so it grows by stroking
   return [hole, (d) => offset(hole.copy(), d)];
-}
-
-/** the am · pm window: a disc turns once a day under it, pivot on the window's bottom edge — half night
- *  (dark, with a crescent and two stars), half day (a sun). hour 12 = all day, 0 = all night. → what is dark */
-function day_night(w, h, hour) {
-  const opening = new Path().rect(-w / 2, -h / 2, w, h), pivot = [0, -h / 2];
-  const turn = (((hour % 24) + 24) % 24) / 24 * 360, reach = 0.55 * h;       // clock angle of the night half's middle
-  const night = sector(0, 2 * (w + h), -90, 90).rotate(-turn).translate(...pivot).intersection(opening);
-  const at = (a, r) => [pivot[0] + r * sin(radians(a)), pivot[1] + r * cos(radians(a))];
-  const crescent = circle(0.4 * h).difference(circle(0.4 * h).translate(0.13 * h, 0.05 * h)).translate(...at(turn, reach));
-  const stars = merge([[-28, 0.72], [30, 0.8]].map(([da, k]) => circle(0.07 * h).translate(...at(turn + da, k * h))));
-  const sun = circle(0.34 * h).translate(...at(turn + 180, reach)).intersection(opening);
-  return merge([night.difference(crescent).difference(stars), sun]);
 }
 
 /** the hour of the day the time shown is in, 0 to 24, in steps of six minutes: what an am · pm window shows, and
  *  when it has to be drawn again (the disc turns 1.5° in six minutes). */
 export const day_hour = (S) => Math.floor((((S.t % 86400) + 86400) % 86400) / 360) / 10;
 export const shows_day = (S) => windows_of(S).some((w) => w.on && WINDOW_KINDS[w.kind] === "am · pm");
+
+/** the day the dial shows: the bar's date, or today where it is opened (S.date "", 4.62). */
+export function shown_day(S) {
+  if (S.date) return S.date;
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** a window as it shows now: one that follows the date (4.62) says the moment's date or weekday, and a moon window its
+ *  age, from the bar's date and the time (moment.js); any other shows its own typed text and age, as before. */
+export function shown_window(S, w) {
+  if (!w.follows) return w;
+  const kind = WINDOW_KINDS[w.kind], mo = moment(shown_day(S), S.t);
+  if (kind === "date" || kind === "day" || kind === "big date") return { ...w, text: window_text(kind === "big date" ? "date" : kind, mo, MOMENT_LANGS[w.names] || "en") };
+  if (kind === "moon phase") return { ...w, age: +mo.moon.toFixed(1) };
+  return w;
+}
 
 /** one window, built: {w (its settings), index, window (the hole), frame, cutline, number (what shows through it),
  *  clear (keep-out zone)}. Everything is made upright in the window's own space, then turned (if it turns with its
@@ -1337,29 +1497,90 @@ function build_window(S, w, index) {
   const [opening, grown] = window_hole(w);
   const high = shape === "rectangle" || shape === "arc" ? w.h : shape === "arch" ? w.w / 2 : w.w;       // the room for what shows, top to bottom
   let content;
-  if (kind === "moon phase") {
+  let more = [];                                   // a picture's further colours: [{path, key, or}] (4.73)
+  if (kind === "moon phase" && w.look === 1) {      // Phase: the sky in the picture's colour, the lit moon the disc's, its dark side the shade
+    const rm = 0.36 * high, { disc, dark } = moon_lit(rm, w.age);
+    const stars = merge([[-0.3, 0.3], [0.31, -0.3]].map(([x, y]) => circle(0.06 * high).translate(x * high, y * high)));
+    content = opening.copy().difference(disc).difference(stars);
+    more = [{ path: dark, key: "c2", or: PICTURE_TONES.shade }];
+  } else if (kind === "moon phase" && w.look === 2) {      // Line: one ink — the moon's outline, its dark side filled, two small stars
+    const rm = 0.36 * high, t = Math.max(0.05 * high, 0.06), { dark } = moon_lit(rm, w.age);
+    const ring = circle(2 * rm).difference(circle(2 * (rm - t)));
+    const star = (x, y, s) => new Path().rect(x - s, y - t / 2, 2 * s, t).union(new Path().rect(x - t / 2, y - s, t, 2 * s));
+    content = merge([ring, dark, star(-0.3 * high, 0.31 * high, 0.07 * high), star(0.31 * high, -0.31 * high, 0.055 * high)]).intersection(opening);
+  } else if (kind === "moon phase") {
     const { moon, stars } = moon_parts(w.w, w.age);
     content = opening.copy().difference(moon).difference(stars);
-  } else if (kind === "am · pm") content = day_night(w.w, high, day_hour(S)).intersection(opening);
-  else if (shape === "arc") {                     // an arc window's word bends along its middle circle, as numerals on path do;
+  } else if (kind === "am · pm") {                 // the disc under the half-round hole, turning on its flat side once a day: pm in the picture's colour, am the disc's
+    content = half_disc(w.w, day_hour(S)).night.intersection(opening);
+  }
+  else if (kind === "big date") {                 // the tens in the left hole (none before 10), the units in the right (4.74)
+    const n = parseInt(w.text, 10), [tens, units] = Number.isFinite(n) ? [n >= 10 ? String(Math.floor(n / 10) % 10) : "", String(n % 10)] : [String(w.text)[0] || "", String(w.text)[1] || ""];
+    const dx = ((w.w - pair_gap(w)) / 2 + pair_gap(w)) / 2, t = window_type(S, w), size = w.h * w.size / 100;
+    content = merge([tens && centred(text_path(tens, t, size)).translate(-dx, 0), units && centred(text_path(units, t, size)).translate(dx, 0)].filter(Boolean));
+  } else if (shape === "arc") {                     // an arc window's word bends along its middle circle, as numerals on path do;
     const a = window_angle(w);                     // read left → right at the bottom too (#166, atlas 2.1, 14 Oct 2026)
-    content = on_path(w.text, w.r, a, window_type(S, w), high * w.size / 100).translate(...centre.map((v) => -v));
-  } else content = centred(text_path(w.text, window_type(S, w), high * w.size / 100));
+    content = on_path(w.text, w.r, a, window_type(S, w), text_room(w) * w.size / 100).translate(...centre.map((v) => -v));
+  } else content = centred(text_path(w.text, window_type(S, w), text_room(w) * w.size / 100));
   const put = (p, turned = true) => (turn && turned ? p.rotate(-turn) : p).translate(...centre);
-  const shows_text = kind === "date" || kind === "day";
+  const shows_text = kind === "date" || kind === "day" || kind === "big date";
   const win = put(opening.copy());
+  more = more.map((m) => ({ ...m, path: put(m.path.intersection(opening)) }));
+  if (w.neighbours && (kind === "date" || kind === "day")) {      // its disc's places either side, where the hole lets them show (4.74)
+    const D = disc_places(S, w), near = merge([-2, -1, 1, 2].map((d) => D.at(D.now + d))).intersection(win);
+    if (!empty(near)) more.push({ path: near, key: "c2", or: PICTURE_TONES.near });
+  }
   return {
     w, index, window: win, number: put(content, !shows_text || w.text_turn),      // a hole's picture turns with it; its text only if asked
+    more,
     frame: w.frame > 0 ? put(grown(w.frame)).difference(win) : null,
     cutline: put(grown(0.05)).difference(win),                 // aperture outline for production
     clear: put(grown(w.frame + w.clear)),                      // keep print clear of the hole
   };
 }
 
+// ── a window's disc (#346, 4.72) ─────────────────────────────
+// what turns under the plate and shows through a window. A date or day window's disc is a band round the dial's
+// centre, as a movement's date ring: as wide as the hole reaches, DISC_PAD more each side, every place printed on it
+// as the window prints its own, each turned to stand where it will read upright under the window; the next place a
+// step clockwise (moment.js disc_turn). An am · pm window's disc is a small one turning on the hole's bottom edge, half
+// night, half day. A moon window has none yet: its moon is drawn moving along its path, not carried on a disc.
+export const DISC_PAD = 0.3, DISC_RIM = 0.5;       // mm: the disc past the hole each side · the case's rim it must stay inside (physics)
+/** x: a built window (statik.windows). → {band, print, inner, outer, centre, reach, fits} in mm on the dial, or null.
+ *  band: the disc · print: what is printed on it · inner, outer: its edges round its own centre · reach: how far from
+ *  the dial's centre it goes · fits: inside the case less the rim, or physics off. */
+export function window_disc(S, x) {
+  const w = x.w, kind = WINDOW_KINDS[w.kind], R = S.dial_d / 2, room = R - DISC_RIM;
+  const centre = clock_point(w.r, window_angle(w)), turn = window_turn(w);
+  const put = (p, turned = true) => (turn && turned ? p.rotate(-turn) : p).translate(...centre);
+  const shape = window_shape(w), high = shape === "rectangle" || shape === "arc" ? w.h : shape === "arch" ? w.w / 2 : w.w;      // as build_window
+  if (kind === "date" || kind === "day") {
+    const e = radial_extent(x.window);
+    if (!e) return null;
+    const inner = Math.max(e[0] - DISC_PAD, 0), outer = e[1] + DISC_PAD;
+    const D = disc_places(S, w), print = memo("disc" + D.key, () => merge(D.list.map((_, p) => D.at(p))));
+    return { band: circle(2 * outer).difference(circle(2 * inner)), print, inner, outer, centre: [0, 0], reach: outer, fits: w.physics === false || outer <= room };
+  }
+  if (kind === "am · pm") {                      // its disc turns on the hole's flat side
+    const { night, r } = half_disc(w.w, day_hour(S)), rho = r + DISC_PAD;
+    const band = put(circle(2 * rho).translate(0, -w.w / 4)), print = put(night.copy());
+    const off = put(new Path().rect(-0.001, -w.w / 4 - 0.001, 0.002, 0.002)).bounds(), pv = [(off[0] + off[2]) / 2, (off[1] + off[3]) / 2];
+    const reach = Math.hypot(...pv) + rho;
+    return { band, print, inner: 0, outer: rho, centre: pv, reach, fits: w.physics === false || reach <= room };
+  }
+  return null;
+}
+
+/** the disc of window i, built fresh from the settings (the panel asks before the dial is drawn again). */
+export function disc_of(S, i) {
+  const w = windows_of(S)[i];
+  return w && w.on ? window_disc(S, build_window(S, shown_window(S, w), i)) : null;
+}
+
 // ── everything that doesn't move ─────────────────────────────
 
 export function build_static(S) {
-  const windows = windows_of(S).map((w, i) => (w.on ? build_window(S, w, i) : null)).filter(Boolean);
+  const windows = windows_of(S).map((w, i) => (w.on ? build_window(S, shown_window(S, w), i) : null)).filter(Boolean);
   const cut = windows.length === 0 ? null : windows.length === 1 ? windows[0].clear : merge(windows.map((x) => x.clear)).removeOverlap();
   let plate = circle(S.dial_d);
   for (const x of windows) plate = plate.difference(x.window);
@@ -1386,7 +1607,7 @@ export function hand_angles(t, beats_per_second = 0) {
 /** drawn pointing at 12, pivot at the origin. T tail, tip point length,
  *  F head / barrel width or ring / disc Ø, at = where that feature sits.
  *  R rounds the flat ends: the tail's corners, and the tip's where the tip is flat. */
-function hand_outline(shape, L, W, T, tip, F, at, R = 0) {
+function hand_outline(shape, L, W, T, tip, F, at, R = 0, bulge = 37.5) {
   tip = min(max(tip, 0), L);
   const shaft = (top, r_top) => poly([[-W / 2, -T], [W / 2, -T], [W / 2, top], [-W / 2, top]], [R, R, r_top, r_top]);
   const pointed = () => poly([[-W / 2, -T], [W / 2, -T], [W / 2, L - tip], [0, L], [-W / 2, L - tip]], [R, R, 0, 0, 0]);
@@ -1395,9 +1616,9 @@ function hand_outline(shape, L, W, T, tip, F, at, R = 0) {
   if (shape === "sword") return poly([[0, L], [W / 2, L - tip], [W * 0.4, -T], [-W * 0.4, -T], [-W / 2, L - tip]], [0, 0, R, R, 0]);
   if (shape === "dauphine") return new Path().polygon([0, L], [W / 2, at], [0, -T], [-W / 2, at]);
   if (shape === "leaf") {
-    const k = 0.55;
-    return new Path().moveTo([0, -T]).curveTo([W * k, L * 0.15], [W * k, L * 0.6], [0, L])
-      .curveTo([-W * k, L * 0.6], [-W * k, L * 0.15], [0, -T]).closePath();
+    const k = 0.55, a = (bulge / 100 - 0.225) * L, b = (bulge / 100 + 0.225) * L;      // at 37.5: 0.15 L and 0.6 L, the leaf of every version before 4.80
+    return new Path().moveTo([0, -T]).curveTo([W * k, a], [W * k, b], [0, L])
+      .curveTo([-W * k, b], [-W * k, a], [0, -T]).closePath();
   }
   if (shape === "arrow") return shaft(L - tip, 0).union(new Path().polygon([-F / 2, L - tip], [F / 2, L - tip], [0, L]));
   if (shape === "syringe") {
@@ -1419,11 +1640,23 @@ export function hand_shape(h) {
   return memo("hand" + key_of(h), () => {
     let shape = HAND_SHAPES[h.shape];
     if (shape === "file") { file_shape(h.file); shape = "baton"; }       // no file: a baton (R17)
-    let p = shape === "disc" ? disc_hand(h) : hand_outline(shape, h.len, h.w, h.tail, h.tip, h.feature, h.feature_at / 100 * h.len, h.round || 0);
+    let p = shape === "disc" ? disc_hand(h) : hand_outline(shape, h.len, h.w, h.tail, h.tip, h.feature, h.feature_at / 100 * h.len, h.round || 0, h.bulge ?? 37.5);
     if (h.wall > 0) p = p.difference(offset(p, -h.wall));
+    if (h.hub > 0 && shape !== "disc") p = p.union(circle(h.hub));      // its hub, solid even on a hollow hand (#370)
     if (h.counter > 0) p = p.union(place(circle(h.counter), -h.tail * COUNTER_AT, 0));
     return p;
   });
+}
+
+/** where a hand is widest, for the handles on its picture (#368): its height up the hand in mm, the number that moves
+ *  it and how much that number changes per mm. Only for the shapes whose widest place is their width's own (a
+ *  dauphine's corners, a leaf's bulge, the shoulder of a pencil's or a sword's point); null for the rest. */
+export function hand_widest(h) {
+  const shape = HAND_SHAPES[h.shape], L = h.len, T = h.tail;
+  if (shape === "dauphine") return { at: h.feature_at / 100 * L, key: "feature_at", per_mm: 100 / L };
+  if (shape === "leaf") return { at: (6 * (h.bulge ?? 37.5) / 100 * L + L - T) / 8, key: "bulge", per_mm: 100 * 8 / (6 * L) };      // the curves' middle (t = ½): (P0 + 3 P1 + 3 P2 + P3) / 8
+  if (shape === "pencil" || shape === "sword") return { at: L - min(max(h.tip, 0), L), key: "tip", per_mm: -1 };
+  return null;
 }
 
 /** a disc hand, pointing at 12: the disc with its one marker. Disc and marker are one colour, so where the marker lies
@@ -1439,7 +1672,9 @@ export function disc_mark(h) {
   return memo("mark" + key_of(h), () => {
     const mark_ring = { ...RING_BASE, shape: h.mark, len: h.mark_len, w: h.mark_w, round_out: h.round || 0, round_in: h.round || 0 };
     const mark = mark_outline(mark_ring, h.mark_len, h.mark_w), b = mark.bounds();
-    return b ? place(mark, max(h.len - (b[3] - b[1]) / 2, 0.1), 0) : null;
+    if (!b) return null;
+    const outer = h.mark_in ? min(h.len, max(h.disc_d, 0.1) / 2) : h.len;      // kept inside the disc (#344)
+    return place(mark, max(outer - (b[3] - b[1]) / 2, 0.1), 0);
   });
 }
 /** a disc hand whose marker is painted on (#300) */
@@ -1456,9 +1691,6 @@ function hand_items(S, t) {
 //  3 · DRAWING — the scene
 // ═════════════════════════════════════════════════════════════
 
-export const GUIDE = [0.0, 0.55, 0.9, 0.5];              // dial edge, date radius, axes
-export const GUIDE_RING = [0.0, 0.55, 0.9, 0.35];        // a ring's edges
-export const GUIDE_SELECTED = [1.0, 0.45, 0.0, 0.95];    // the ring being edited
 
 /** what to draw, bottom to top. Every export and the preview read this list (R26).
  *
@@ -1484,22 +1716,46 @@ export function scene(S, statik, t, preview = true, selected = null) {
     }
     if (statik.hole_line) add("hole", statik.hole_line, black);
   } else {
+    // X-ray (4.72, #346; rewritten 4.88 — Okay, 19 Oct 2026: "Xray makes the unseen full visible, sensible z height
+    // differences (not editable) and a stacking order. Selected shows above all others. Top is 100% opacity, with a
+    // white dotted outline, below gets -15 opacity gradually"). Preview only (R5, R26). The stack, top down: the
+    // selected window's disc · the hands · the face (plate, rings, what the holes show) · the other discs, the
+    // biggest deepest, as a movement stacks them. Each layer under the top one is 15 % fainter than the one above.
+    const discs = preview && S.xray ? windows.map((x) => ({ x, d: window_disc(S, x) })).filter((v) => v.d) : [];
+    const xray = discs.length > 0, chosen = xray ? discs.find((v) => v.x.index === (S.ui_window ?? 0)) || null : null;
+    const under = discs.filter((v) => v !== chosen).sort((p, q) => q.d.outer - p.d.outer);      // the biggest first: the deepest
+    const layers = (chosen ? 1 : 0) + 1 + 1 + under.length;      // the selected disc · the hands · the face · each other disc
+    const dim = (fill, layer) => (xray && fill ? [...fill.slice(0, 3), fill[3] * Math.max(1 - 0.15 * layer, 0.25)] : fill);      // layer 0 at the top
+    const face = chosen ? 2 : 1, hands_layer = chosen ? 1 : 0;
+    under.forEach(({ x, d }, i) => {
+      const layer = face + 1 + (under.length - 1 - i);
+      add("disc", d.band, dim(x.w.disc_c || [1, 1, 1, 1], layer), { window: x.index });
+      add("disc print", d.print, dim(x.w.text_c || x.w.ink, layer), { window: x.index });
+    });
     for (const x of windows) {                     // what shows through each hole, on white
-      add("date disc", x.window, x.w.disc_c || [1, 1, 1, 1], { window: x.index });
-      add("date number", x.number, x.w.text_c || x.w.ink, { window: x.index });
+      add("date disc", x.window, dim(x.w.disc_c || [1, 1, 1, 1], face), { window: x.index });
+      add("date number", x.number, dim(x.w.text_c || x.w.ink, face), { window: x.index });
+      for (const m of x.more || []) add("date picture", m.path, dim(x.w[m.key] || m.or, face), { window: x.index });      // a picture's further colours (4.73)
     }
-    add("plate", S.ha_on ? statik.plate : statik.plate_holed, S.c_plate);      // the hole shows when the hands are hidden
+    add("plate", S.ha_on ? statik.plate : statik.plate_holed, dim(S.c_plate, face));      // the hole shows when the hands are hidden
     for (const d of rings) {
-      if (d.tints) d.tints.forEach((tint, n) => add("ring", tint.path, sector_colour(d.ring, tint.at), { ring: d, index: index(d), part: n + 1 }));
-      else add("ring", d.path, d.ring.c, { ring: d, index: index(d) });
+      if (d.tints) d.tints.forEach((tint, n) => add("ring", tint.path, dim(sector_colour(d.ring, tint.at), face), { ring: d, index: index(d), part: n + 1 }));
+      else add("ring", d.path, dim(d.ring.c, face), { ring: d, index: index(d) });
     }
-    for (const x of windows) add("date frame", x.frame, x.w.ink, { window: x.index });
+    for (const x of windows) add("date frame", x.frame, dim(x.w.ink, face), { window: x.index });
     if (S.ha_on) {
       for (const [name, colour, path, a, h] of hand_items(S, t)) {
-        add("hand", path, colour, { name, angle: a });
-        if (paints_mark(h) && disc_mark(h)) add("mark", disc_mark(h), h.mark_c, { name, angle: a });      // a disc's painted mark turns with it (#300)
+        add("hand", path, dim(colour, hands_layer), { name, angle: a });
+        if (paints_mark(h) && disc_mark(h)) add("mark", disc_mark(h), dim(h.mark_c, hands_layer), { name, angle: a });      // a disc's painted mark turns with it (#300)
       }
-      if (cap_shows(S)) add("cap", circle(S.ha_cap), S.c_cap);
+      if (cap_shows(S)) add("cap", circle(S.ha_cap), dim(S.c_cap, hands_layer));
+    }
+    if (chosen) {                                  // the selected window's disc on top, whole, with a white dotted outline
+      const { x, d } = chosen;
+      add("disc", d.band, x.w.disc_c || [1, 1, 1, 1], { window: x.index });
+      add("disc print", d.print, x.w.text_c || x.w.ink, { window: x.index });
+      add("disc edge", circle(2 * d.outer).translate(...d.centre), null, { stroke: [1, 1, 1, 1], px: 1.5, dots: true, window: x.index });
+      if (d.inner > 0) add("disc edge", circle(2 * d.inner).translate(...d.centre), null, { stroke: [1, 1, 1, 1], px: 1.5, dots: true, window: x.index });
     }
   }
 
@@ -1525,12 +1781,13 @@ export function scene(S, statik, t, preview = true, selected = null) {
     // (gd_rings), only the selected one (gd_sel alone), or none.
     // its outer and inner edges whole, its middle dotted (Okay, 16 Oct 2026, #272: "center of the ring is dotted. All
     // rings and windows get their own outer and inner guide circles in solid line"). Numerals: the edges their figures
-    // reach as drawn. A window: the edges its hole reaches; which windows, as for rings (gd_wins, gd_wsel)
+    // reach as drawn. A window: the edges its hole reaches; which windows, as for rings (gd_wins, gd_wsel).
+    // A ring's dotted line is its radius — where it is resized from (#257, 4.47: the outer end, the middle or the inner
+    // end of its marks; a numeral's anchor); a window's is its middle.
     const built = new Map(statik.rings.map((d) => [d.ring, d]));
-    const edges = (k, outer, inner, px, a) => {
+    const edges = (k, outer, inner, px, a, at = (outer + inner) / 2) => {
       for (const r of [...new Set([outer, inner])]) if (r > 0) stroke_guide(circle(2 * r), k, px, a);
-      const mid = (outer + inner) / 2;
-      if (outer - inner > 0.01 && mid > 0) add("guide", circle(2 * mid), null, { stroke: tone(k, a), px, dots: true });
+      if (outer - inner > 0.01 && at > 0) add("guide", circle(2 * at), null, { stroke: tone(k, a), px, dots: true });
     };
     // one thing in focus (#301; Okay, 16 Oct 2026, on 4.43: "both window and [ring] active gives us a complex look"):
     // the tab one works in says what — on Rings its selected ring, on Windows its selected window, on the others
@@ -1542,14 +1799,21 @@ export function scene(S, statik, t, preview = true, selected = null) {
       const focused = focus === "rings" && i === selected, chosen = focused && S.gd_sel, k = ring_guide(S, i);
       if (!ring.on || k === null || !(S.gd_rings || chosen)) return;
       const kind = kind_of(ring);
-      let outer = ring.r, inner = ring.r - ({ ticks: ring.len, markers: ring.len, band: ring.width }[kind] || 0);
-      if (kind === "numerals") { const e = radial_extent(built.get(ring)?.path); if (e) [inner, outer] = e; }
-      edges(k, outer, inner, focused ? S.gd_w * 1.5 : S.gd_w, faded(focused));
+      const extent = { ticks: ring.len, markers: ring.len, band: ring.width }[kind] || 0;
+      let outer = ring.r + from_shift(ring, extent), inner = outer - extent;
+      if (has_text(ring)) { const e = radial_extent(built.get(ring)?.path); if (e) [inner, outer] = e; }
+      edges(k, outer, inner, focused ? S.gd_w * 1.5 : S.gd_w, faded(focused), ring.r);
     });
     for (const x of windows) {
       const focused = focus === "windows" && x.index === (S.ui_window ?? 0), chosen = focused && S.gd_wsel, k = window_guide(S, x.index), e = radial_extent(x.window);
       if (k === null || !e || !(S.gd_wins || chosen)) continue;
       edges(k, e[1], e[0], focused ? S.gd_w * 1.5 : S.gd_w, faded(focused));
+      // its disc's edges, dashed, in the window's colour — the outer one red when the disc passes the case with physics on (4.72, #346)
+      const d = window_disc(S, x);
+      if (d) {
+        const px = focused ? S.gd_w * 1.5 : S.gd_w, a = faded(focused);
+        for (const r of [d.inner, d.outer]) if (r > 0) add("guide", circle(2 * r).translate(...d.centre), null, { stroke: r === d.outer && !d.fits ? [...DISC_WARN, a] : tone(k, a), px, dashes: true });
+      }
     }
     for (const g of S.gd_more || []) {              // the guides added by hand
       if (!(g.k >= 0)) continue;
@@ -1569,7 +1833,7 @@ export const turned = (path, angle) => path.copy().rotate(-angle);
  *  counts, percentages or the page margin; and not the diameter itself, which the caller sets.
  *  measures(S) → the values, in a fixed order; set_measures(S, values) puts a list of the same length back. */
 export const RING_MM = ["r", "len", "w", "width", "clear", "round_out", "round_in", "wall", "size", "twelve_gap"];
-export const HAND_MM = ["len", "w", "tail", "tip", "feature", "counter", "wall", "round", "disc_d", "mark_len", "mark_w"];
+export const HAND_MM = ["len", "w", "tail", "tip", "feature", "counter", "wall", "round", "disc_d", "mark_len", "mark_w", "hub"];
 export const WINDOW_MM = ["r", "w", "h", "round", "frame", "clear"];
 function each_measure(S, visit) {
   for (const ring of S.rings) {

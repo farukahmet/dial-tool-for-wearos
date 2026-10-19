@@ -1,11 +1,11 @@
 # Dial Tool — design canon
 
-*§9 (the tool's icons) added 14 Oct 2026, beta 4.36; 4.36.1: quiet signs, rim colour, dashed rings, the Guides drawings. Written 4 Oct 2026 with the guidebook's third edition (beta 2.3); revised the same day with the fourth to seventh. Okay: "this design research might influence
+*Written 4 Oct 2026 for the guidebook; §9 (the tool's icons) 14 Oct 2026; last updated 19 Oct 2026 (beta 4.88.2: tick rows, §6). Okay: "this design research might influence
 the whole build, take notes… let's make it canon."*
 
 This file is the rule for everything Dial Tool shows on paper or screen that isn't a dial: the guidebook
 first, then presentation sheets, spec sheets and, where it applies, the tool's own window.
-`guide/look/` (`style.css`, `build.mjs`) is its reference implementation; if they disagree, fix one of them the same day. (Until 15 Oct 2026 it was `docs/guide/`, now `archive/guide/`; paths below that name `docs/guide/` or `tools/make_guide.py` describe that archived build.)
+`guide/look/` (`style.css`, `build.mjs`) is its reference implementation; if they disagree, fix one of them the same day. The old guides are in `archive/guide/`.
 
 ## 1 · What it is modelled on
 
@@ -42,7 +42,7 @@ check §2–§6 against it.
 ## 2 · Type
 
 - **One family, sans.** Inter (open licence; fetched at build time). Okay asked for "a sans like Univers";
-  Univers itself can't be redistributed. Changing the family is one `@font-face` line in `docs/guide/style.css`.
+  Univers itself can't be redistributed. Changing the family is one `@font-face` line in `guide/look/style.css`.
   No monospace anywhere: file names are italic, things you type or click are semibold.
 - **Two weights and one light.** 400 text, 600 emphasis, headlines and leads, 300 for the big titles only
   ("big, light type with small, dark type").
@@ -110,8 +110,8 @@ alignment to these rules as well."*
   fourteenths. Yellow keeps the most colour (C 0.095); hues far from it get less (down to 0.045), because a
   green or blue of equal strength looks louder on the grey ground. Section 1 is `#F0DC8E`.
 - A section's colour is used for exactly two things: the **plate of its plain figures** (whole and close-up)
-  and its **tab** on the page edge. The cover's right field is section 1's. Defined once: `TINT` and `tint()`
-  in `tools/make_guide.py`; pages receive it as `--sig`.
+  and its **tab** on the page edge. The cover's right field is section 1's. Defined once, in `guide/look/`;
+  pages receive it as `--sig`.
 - Dials keep their own colours. Everything around them is neutral.
 - No tinted panels, rounded cards, shadows or decorative rules. A hairline above a block is the only frame.
   *Exception, the tool's window only (Okay, 12 Oct 2026): colour things are round and the colour pop-out is near black — the pop-out, a colour pill, a swatch.*
@@ -127,12 +127,12 @@ alignment to these rules as well."*
 - **A plain plate takes its section's colour** (§4), in whole figures and in close-ups. Classic dials keep their plates.
 - **Side by side, one thing changes.** Figures in a row share view, scale and crop; only the setting in the
   caption differs. A caption is two lines: what it is (semibold), then its values (grey).
-- **Annotations are drawn in the dial's own millimetres** (`overlay()` in `tools/make_guide.py`): dimension
+- **Annotations are drawn in the dial's own millimetres** (`guide/look/`): dimension
   lines with end ticks, leaders ending in a small ring, dashed construction lines. Text on them is 8 pt and
   lines 0.2 mm on paper at any enlargement — the page measures each picture and sets them. The build reports
   a label that leaves its picture or overlaps another.
 - **Line icons** (the guidebook's; the tool's own icons follow §9). One set, drawn on a 24-unit square with a single stroke, square ends, no fill
-  (`docs/guide/icons.svg`). One per text block, above its label or beside it; a few per page, never as
+  (drawn inline by `guide/look/build.mjs`). One per text block, above its label or beside it; a few per page, never as
   decoration without a block. Four are drawn large on the Start page.
 - **Watch notes.** A triangle icon and a short paragraph: what a careful reader would otherwise find out the
   hard way (order works twice, radii are absolute, fillets stop silently …). One or two per page, under the
@@ -157,12 +157,33 @@ alignment to these rules as well."*
   `archive/drawbot/dial.py`'s row descriptions and a classic dial's settings; the preview is the tool's own, with guides.
 - Small groups of controls beside figures use the same drawing at text size.
 - One thing in the window drawing is invented: the build and frame times in the status line.
+- **Tick rows in the window** (Okay, 19 Oct 2026, 18:00: "These are rules now"): the tick box stands on the words'
+  first line, its middle on that line's middle — never between two lines. The words run to two lines at most, with
+  no orphan: a second line gets filled (say more) or the first is cut short so the lines balance (`text-wrap:
+  balance`). The Show tick under the window cards and the hand tabs: the white tick fills its black box
+  (the box as it is, the tick grown to the box less half a unit).
+- **A tick says its name; a note says what it means** (Okay, 19 Oct 2026, #420: "I like b … hiding the white line, one
+  line or two line if necessary explanations … applies to small grays too. They are always within the same box that
+  ends with a bottom white border"). A tick's words are its name, a few words in ink, on one line ("Big date",
+  "Neighbours", "Inside the case"). What it does goes in a note under it. Every note, under a tick or under any other
+  row, is part of that row's box: no line between them, the box's line under the note. A note is small (`--t-s`)
+  and grey, one line or two. Its first line follows the row's line at the panel's line spacing (`--leading`): under
+  a tick, as a tick's second line would, starting where the tick's words start; under controls, just below their
+  boxes, on the controls' column. The box ends as far under the note as a row's words start above
+  (`--note-air`). The CSS for it: `4c-rows.css`, *a note and the row it explains are one box*.
+- **A row of tile buttons** (a window's complications, a mark's shapes; Okay, 19 Oct 2026, 21:26: "Complications tabs
+  are 10/10. Do not touch, rule for 4 item buttons like this from the future. 5th squeezes in, or we find another
+  way"; "2 or 3 buttons on a selector like complications work the same. Same size buttons, gaps on the right"): the
+  tiles stand on the controls' column, beside the row's name, four to a line and equal. Two or three keep a four's
+  size, the room left at the right. A fifth squeezes in, the five equal; more than five is a sign to find another
+  way. `.picks` in `3-controls.css`; `--across` (app.js) is never less than four.
 
 ## 7 · Writing
 
 - A block is a label, a one-sentence headline, and two to four lines. If it needs more, it is two blocks.
 - Say what a setting does and give a real value. No adjectives about the tool.
 - Glossary words only (`docs/glossary.md`).
+- A tick row's words: at most two lines, the second filled or none (§6).
 - **Written for use.** A block says what you would do with the setting, not only what it is. One dry line a
   page is welcome ("the ranges are habits, not limits"); two is a tone.
 - **Three ways in**: the contents (cover), the thumb index (page edges), and Find it (last page: what you

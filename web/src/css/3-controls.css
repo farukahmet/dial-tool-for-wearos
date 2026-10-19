@@ -7,7 +7,8 @@
   /* a short label in a box of its own, centred on its ink, with proportional figures (ink.js writes the two
      offsets; Okay, 14 Oct 2026: "proportional ink box it is"; design canon §2) */
   .ink { display: inline-block; font-variant-numeric: proportional-nums lining-nums; transform: translate(var(--ink-dx, 0), var(--ink-dy, 0)); }
-  :is(button, select, input[type="text"], input[type="checkbox"], textarea):focus-visible { outline: var(--thick) solid var(--ink); outline-offset: 0; }
+  :is(button, select, input[type="text"], input[type="checkbox"], input[type="radio"], textarea):focus-visible { outline: var(--thick) solid var(--ink); outline-offset: 0; }
+  [role="option"]:focus-visible { outline: var(--thick) solid var(--ink); outline-offset: 0; }      /* a ring's row, reached with Tab (#244, 4.47.2) */
   [data-press="touch"] :is(button, input[type="checkbox"]):focus-visible { outline: none; }      /* a finger's tap leaves no focus ring; a key brings it back (#153) */
   input[type="text"]:focus, select:focus { outline: var(--thick) solid var(--ink); outline-offset: 0; }
 
@@ -47,11 +48,18 @@
   input[type="text"], select { height: var(--control); width: 100%; min-width: 0; padding: 0 var(--unit); border: var(--hair) solid var(--rule); border-radius: 0; background: var(--field); }
 
   /* a tick box: square like every other control; ink when ticked */
-  input[type="checkbox"] { appearance: none; flex: none; display: inline-grid; place-content: center; width: var(--tick); height: var(--tick); margin: 0 var(--u3) 0 0; border: var(--hair) solid var(--ink); border-radius: 0; background: var(--field); cursor: pointer; }
+  input[type="checkbox"] { appearance: none; flex: none; display: inline-grid; place-content: center; width: var(--tick); height: var(--tick); margin: 0 var(--tick-gap) 0 0; border: var(--hair) solid var(--ink); border-radius: 0; background: var(--field); cursor: pointer; }
   input[type="checkbox"]::before { content: ""; width: calc(var(--tick) - var(--unit)); height: calc(var(--tick) - var(--unit)); background: var(--paper); clip-path: polygon(12% 48%, 0 62%, 40% 100%, 100% 20%, 86% 8%, 38% 72%); opacity: 0; }
   input[type="checkbox"]:checked { background: var(--ink); }
   input[type="checkbox"]:checked::before { opacity: 1; }
-  .check { display: inline-flex; align-items: center; cursor: pointer; }
+  /* a radio button (Give way's choices, #258): the tick box's round sister — a ring of ink, a disc of ink when chosen */
+  input[type="radio"] { appearance: none; flex: none; display: inline-grid; place-content: center; width: var(--tick); height: var(--tick); margin: 0 var(--u3) 0 0; border: var(--hair) solid var(--ink); border-radius: 50%; background: var(--field); cursor: pointer; }
+  input[type="radio"]::before { content: ""; width: calc(var(--tick) - var(--unit) - var(--u1)); height: calc(var(--tick) - var(--unit) - var(--u1)); border-radius: 50%; background: var(--ink); opacity: 0; }
+  input[type="radio"]:checked::before { opacity: 1; }
+  /* a tick and its words (design canon §6; Okay, 19 Oct 2026): the box on the first line, its middle on the line's
+     middle, so two lines of words hang from it; the lines balanced, no orphan word */
+  .check { display: inline-flex; align-items: start; cursor: pointer; text-wrap: balance; }
+  .check > input[type="checkbox"] { margin-top: calc((1lh - var(--tick)) / 2); }
 
   /* a slider: a thin track, ink up to the handle, and the handle a black disc with a light centre.
      --p (0 to 1, set in app.js: filled) says how far along it is; --fill is that, measured along the track. */
@@ -71,8 +79,8 @@
   .pickt, .tile { display: grid; border: var(--hair) solid var(--rule); background: var(--field); }
   :is(.pickt, .tile):hover { background: var(--hover); }
   .picks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--unit); padding: var(--unit) 0; }      /* one small space, the unit: between the tiles, both ways, and from them to the row's lines. The tiles are wider than a column for it */
-  .picks.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }      /* five choices (a window's shape) */
-  .pickt { justify-items: center; align-content: start; gap: calc(var(--unit) / 2); min-height: var(--tile); padding: var(--unit) var(--hair); font-size: var(--t-xs); line-height: 1.15; }
+  .picks.across { grid-template-columns: repeat(var(--across), minmax(0, 1fr)); }      /* a line of all its tiles, however many, equal, on the controls' column beside its name as every row's controls stand (Okay, 19 Oct 2026, 20:37: a window's four complications "EQUAL", from the controls' line) */
+  .pickt { justify-items: center; align-content: start; gap: var(--u1); min-height: var(--tile); padding: var(--unit) var(--hair); font-size: var(--t-xs); line-height: 1.15; }
   .picks.small .pickt { min-height: 0; }      /* smaller pictures, a tile no higher than they need (a window's Shows, 4.46.1) */
   .pickt span { white-space: nowrap; text-align: center; }      /* a tile's word is one line; a name too long for it has a short one in TILE_WORDS */
   .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--unit) var(--gap); }

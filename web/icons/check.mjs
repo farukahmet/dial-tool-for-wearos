@@ -1,6 +1,6 @@
 // icons/check.mjs — the icon check (R33). Opens the built page (dial-tool.html) in Chromium at 2×, visits the window's
 // states, finds every icon (an <svg> in the panel, the bars and the pop-outs: not the preview, the ruler, font samples,
-// hand details or the Gallery), and checks it against the icon grid written in src/app.js (docs/design.md §9):
+// hand details, the print sheet's page (4.75) or the Gallery), and checks it against the icon grid written in src/app.js (docs/design.md §9):
 //   1. one unit, one point: the viewBox is the icon's size on screen (hand tiles: twice, drawn by the geometry)
 //   2. every stroked line has one of the four widths, LINE · SLANT · CURVE · DENSE (or DENSE + 1/8: the round corners of
 //      a quiet box, drawn with box(…, DENSE, DENSE + 1 / 8)), or is a pictured width (PICTURED)
@@ -32,7 +32,8 @@ const PICTURED = [
   { host: /^iris-box/, widths: [1], why: "the showcase's X, the eye's rays made readable while faint (Okay, 15 Oct 2026, 04:59: \"iris becomes an x\")" },
   { host: /^hands-key/, widths: [1], why: "the showcase's hands key, lines 1 as the X across from it (Okay, 15 Oct 2026, 07:40)" },
   { host: /^eye-box/, widths: [0.625], why: "the eye switch's rays, thin on purpose (Okay, 15 Oct 2026, 03:41: \"I want to see thin lines\"; 0.5 until 16 Oct: \"thicker lines, just barely visibly\")" },
-  { host: /^value-pop-(plus|minus)$/, widths: [3], why: "the number popup's − and +, thick with round ends, in discs half as high again as a pill (Okay's drawing, 16 Oct 2026: \"Thicker plus minus, rounded ends\")" },
+  { host: /^value-pop-(plus|minus)$/, widths: [6], why: "the controller's − and +, 6 thick (8 until 4.85, when the controller went to three quarters), square ends, white on their discs (controller 2.svg, 18 Oct 2026; round ends from his drawing of 17 Oct, 3 from 16 Oct)" },
+  { host: /^(Skip where|Knock out): /, widths: [3], why: "Give way's drawing: this ring's ticks, a dial's ticks pictured, thick (Okay, 18 Oct 2026: \"thicker indices\")" },
   { host: /^logo$/, widths: [1, 1.375], why: "Okay's own mark, at his weights: lines 1, ring 1.375 (15 Oct 2026, 03:06: \"a bit thinner\")" },
 ];
 const near = (a, b) => Math.abs(a - b) < 0.006;
@@ -57,7 +58,7 @@ let n = 0;
 // what an icon is, read in the page: size, scale, every drawn child with its width, path and the transform it sits in
 const collect = async (state) => {
   const found = await page.evaluate(() => {
-    const skip = (s) => s.closest(".preview, .ruler, .fontrow, .examples, .detail, .sample, .face, .tip, .fontname") || s.classList.contains("preview") || s.classList.contains("ruler");
+    const skip = (s) => s.closest(".preview, .ruler, .fontrow, .examples, .detail, .sample, .face, .tip, .fontname, .sheetpage") || s.classList.contains("preview") || s.classList.contains("ruler");
     document.querySelectorAll("[data-icon]").forEach((e) => e.removeAttribute("data-icon"));
     const res = [];
     document.querySelectorAll("svg").forEach((s, i) => {
@@ -66,7 +67,7 @@ const collect = async (state) => {
       if (r.width < 2 || r.height < 2) return;
       for (let p = s; p && p !== document.body; p = p.parentElement) if (getComputedStyle(p).display === "none" || getComputedStyle(p).visibility === "hidden") return;
       const vb = s.viewBox.baseVal, scale = vb && vb.width ? r.width / vb.width : 1;
-      const host = s.closest("button, a, label, li, summary, .card, h2") || s.parentElement;
+      const host = s.closest(".kindicon, button, a, label, li, summary, .card, h2") || s.parentElement;      // .kindicon: a ring row's kind picture names itself (ring-kind-row-…), not its row (4.50)
       const name = host.id || host.getAttribute("data-tab") || host.title || host.getAttribute("aria-label") || (host.textContent || "").trim().slice(0, 24);
       const root = s.getCTM();
       const parts = [...s.querySelectorAll("path,circle,rect,line,polyline,polygon,ellipse")].filter((e) => !e.closest("mask, clipPath, defs")).map((e) => {
@@ -118,7 +119,7 @@ await page.keyboard.press("Escape");
 await visit("size pop-up", () => page.click("#ring-size"));
 await page.keyboard.press("Escape");
 await visit("font box", async () => { await page.click('.ringlist li.ring:has-text("numerals")'); await unfold(); await page.evaluate(() => document.querySelectorAll(".fontbox .partfold:not(.none)").forEach((b) => b.click())); });
-await visit("font sheet", async () => { await page.click("#font-change"); await page.waitForTimeout(400); });
+await visit("font sheet", async () => { await page.click("#font-current"); await page.waitForTimeout(400); });
 await page.keyboard.press("Escape");
 await visit("Hands", () => tab("Hands"));
 await visit("hand shapes", () => page.click("#hand-shape-Shape-7"));      // every shape is shown under the box since 4.46.3: one chosen, so a chosen thumb is looked at too

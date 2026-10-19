@@ -12,12 +12,7 @@ import {
   empty,
 } from "../geometry.js";
 
-const num = (v, digits = 4) => {
-  const s = (v + 0).toFixed(digits).replace(/^-(0(\.0+)?)$/, "$1");
-  return s.includes(".") ? s.replace(/\.?0+$/, "") || "0" : s;
-};
-
-const rgb = (c) => "#" + c.slice(0, 3).map((v) => Math.round(Math.min(Math.max(v, 0), 1) * 255).toString(16).padStart(2, "0")).join("").toUpperCase();
+import { num, rgb } from "../output.js";      // the same number and colour writers as the SVG and PDF files
 
 /**
  * Returns an SVG document for a given list of scene items scaled to 450x450 px.
@@ -43,43 +38,6 @@ function layer_svg(S, items, { background = null, size = 450 } = {}) {
   }
   out.push(`  </g>`, `</svg>`);
   return out.join("\n");
-}
-
-/**
- * Builds SVG for just the dial plate (background disc).
- */
-export function svg_dial_plate(S, statik, ambient = false) {
-  if (!statik.plate) return null;
-  let fill = S.c_plate;
-  if (ambient === "dimmed") {
-    fill = [S.c_plate[0] * 0.15, S.c_plate[1] * 0.15, S.c_plate[2] * 0.15, 1];
-  } else if (ambient && ambient !== "plate") {
-    // "black" or true: pure black plate (or omit if alpha=0)
-    fill = [0, 0, 0, 1];
-  }
-  return layer_svg(S, [{ role: "plate", path: statik.plate, fill }]);
-}
-
-/**
- * Builds SVG for just the dial rings (ticks, numerals, markers, bands).
- */
-export function svg_dial_rings(S, statik, ambient = false) {
-  const items = [];
-  const rings = statik.rings.slice().reverse();
-
-  for (const d of rings) {
-    if (d.tints) {
-      d.tints.forEach((tint) => {
-        const fill = ambient ? [0.9, 0.9, 0.9, 1] : sector_colour(d.ring, tint.at);
-        items.push({ role: "ring", path: tint.path, fill });
-      });
-    } else {
-      const fill = ambient ? [0.9, 0.9, 0.9, 1] : d.ring.c;
-      items.push({ role: "ring", path: d.path, fill });
-    }
-  }
-
-  return layer_svg(S, items);
 }
 
 /**
@@ -182,7 +140,7 @@ export function compute_window_layout(S, x) {
   const kind = WINDOW_KINDS[x.w.kind] || "date";
   let frames, cols, rows, colExpr, rowExpr;
 
-  if (kind === "date") {
+  if (kind === "date" || kind === "big date") {      // a big date (4.74): one frame a day, as a date
     frames = 31;
     cols = 6;
     rows = 6;
@@ -266,7 +224,7 @@ export function svg_window_sheet(S, x) {
     const ty = row * boxH + (225 - boxY);
 
     const frameWin = build_single_window(S, x.index, (w, S_copy) => {
-      if (kind === "date") {
+      if (kind === "date" || kind === "big date") {
         const d = k + 1;
         w.text = zeroPadDate && d < 10 ? `0${d}` : String(d);
       } else if (kind === "day") {
@@ -282,6 +240,10 @@ export function svg_window_sheet(S, x) {
     out.push(`    <path d="${discD}" fill="${discFill}"${discAlpha}/>`);
     if (frameWin && frameWin.number && !empty(frameWin.number)) {
       out.push(`    <path d="${frameWin.number.svg(5, true)}" fill="${textFill}"${textAlpha}/>`);
+    }
+    for (const m of (frameWin && frameWin.more) || []) {      // a picture's further colours, a date's neighbours (4.73, 4.74)
+      const c = x.w[m.key] || m.or;
+      if (m.path && !empty(m.path)) out.push(`    <path d="${m.path.svg(5, true)}" fill="${rgb(c)}"${c[3] < 1 ? ` fill-opacity="${num(c[3])}"` : ""}/>`);
     }
     if (frameD) out.push(`    <path d="${frameD}" fill="${frameFill}"${frameAlpha}/>`);
     out.push(`  </g>`);
@@ -330,6 +292,7 @@ export function svg_preview(S, statik) {
   for (const x of statik.windows || []) {
     items.push({ role: "date disc", path: x.window, fill: x.w.disc_c || [1, 1, 1, 1] });
     items.push({ role: "date number", path: x.number, fill: x.w.text_c || x.w.ink });
+    for (const m of x.more || []) items.push({ role: "date picture", path: m.path, fill: x.w[m.key] || m.or });      // a picture's further colours (4.73)
   }
 
   if (statik.plate) items.push({ role: "plate", path: statik.plate, fill: S.c_plate });

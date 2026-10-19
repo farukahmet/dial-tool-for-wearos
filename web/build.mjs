@@ -13,9 +13,9 @@ import { createRequire } from "module";
 
 import { fileURLToPath } from "url";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
+const here = path.dirname(fileURLToPath(import.meta.url));      // a path with spaces, or on Windows (farukahmet's PRs #1 and #3, 18 Oct 2026)
 const require = createRequire(import.meta.url);
-const defaultFont = fs.existsSync("/usr/share/fonts/opentype/inter/Inter-Regular.otf")
+const defaultFont = fs.existsSync("/usr/share/fonts/opentype/inter/Inter-Regular.otf")      // Inter, SIL Open Font Licence; where it isn't installed, Barlow (farukahmet's PRs #1 and #3)
   ? "/usr/share/fonts/opentype/inter/Inter-Regular.otf"
   : path.join(here, "fonts/Barlow-Regular.ttf");
 const FONT = process.argv[2] || defaultFont;
@@ -49,7 +49,11 @@ const time_face = `@font-face { font-family: "Dial Time"; font-weight: 300; src:
 // Dial Mono (fonts/ui/mono_font.py: JetBrains Mono, SIL OFL, at the weight whose stem is a line at 10 px, cut down):
 // the unit box's word (#302, beta 4.44.1)
 const unit_face = `@font-face { font-family: "Dial Mono"; font-weight: 400; src: url(data:font/ttf;base64,${b64(path.join(here, "fonts/ui/DialMono.ttf"))}) format("truetype"); font-display: block; }`;
-const css = sheets.map((f) => fs.readFileSync(path.join(here, "src/css", f), "utf8")).join("\n") + pixel + time_face + unit_face;
+// Dial Date (fonts/ui/date_font.py: Inter SemiBold, SIL OFL, its figures only): the bar's stacked date (Okay: "try inter with appropriate weight for that size")
+const date_face = `@font-face { font-family: "Dial Date"; font-weight: 600; src: url(data:font/otf;base64,${b64(path.join(here, "fonts/ui/DialDate-SemiBold.otf"))}) format("opentype"); font-display: block; }`;
+// Dial Pop (fonts/ui/pop_font.py: Barlow Regular, SIL OFL, cut down to letters and figures): the bar's date popup (#402; Okay, 19 Oct 2026: "Try barlow not condensed for font")
+const pop_face = `@font-face { font-family: "Dial Pop"; font-weight: 400; src: url(data:font/ttf;base64,${b64(path.join(here, "fonts/ui/DialPop-Regular.ttf"))}) format("truetype"); font-display: block; }`;
+const css = sheets.map((f) => fs.readFileSync(path.join(here, "src/css", f), "utf8")).join("\n") + pixel + time_face + unit_face + date_face + pop_face;
 const version = /VERSION = "([^"]+)"/.exec(fs.readFileSync(path.join(here, "src/geometry.js"), "utf8"))[1];
 
 const html = `<!doctype html>

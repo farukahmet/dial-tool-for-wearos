@@ -62,6 +62,7 @@ await page.evaluate(() => {
 await page.click('button[data-tab="Export"]');
 await page.waitForSelector("#export-wearos", { state: "visible", timeout: 5000 });
 await page.fill("#wearos-name", "Bauhaus 38");
+await page.press("#wearos-name", "Enter");
 const pkgNote = await page.textContent("#wearos-pkg");
 console.log(`✓ Custom watch face package preview: ${pkgNote}`);
 if (!pkgNote.includes("com.dialtool.watchface.bauhaus_38")) {

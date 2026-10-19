@@ -20,8 +20,29 @@
   .body .row.num:not(.side) { grid-template-columns: var(--num-columns); column-gap: 0; }      /* in the panel; the guides' list and a value pop-up lay their rows their own way */
   .body .row.num:not(.side) > :first-child { grid-column: 1 / 4; }
   .body .row.num:not(.side) > input[type="range"] { grid-column: 5; }
-  .body .row.num:not(.side) > input[type="text"] { grid-column: 7; }
-  .body .row.num:not(.side) > .steps { grid-column: 9; }
+  .body .row.num:not(.side) > .numbox { grid-column: 7 / -1; }      /* the value and its − + touching, over the third and fourth tiles' places: the value takes the gap between them */
+  /* one number box for the whole tool (4.64; Okay, 18 Oct 2026, 21:20: "This version of boxes win … these replace all
+     with two changes. Number box touches minus box. Signs grow inside the box as much as these new thick bordered
+     ones"): the value in its box, − and + in theirs, all touching, one hairline of the rule's grey round and between.
+     A full row's: value a tile and a unit wide, − + a tile; beside a hand's box (side) and in a quiet row, narrower
+     (--box-side-*); in Positions, Positions' own (--pos-*). The signs are drawn, 12 across (STEP, app.js) */
+  .row.resetblank { padding: var(--unit) 0; row-gap: var(--unit); }
+  /* a print sheet (4.75): Sheet · its button · the page drawn small at the right, the paper white on its hairline, every copy a disc of ink */
+  .row.sheetrow { padding: var(--unit) 0; }
+  .row.sheetrow > .btn { grid-column: 3 / span 2; justify-self: start; }
+  .row.sheetrow > .sheetpage { grid-column: 5 / -1; justify-self: end; width: var(--sheet-w); }
+  .sheetpage svg { display: block; width: 100%; height: auto; }
+  .sheetpage .paper { fill: var(--white); stroke: var(--rule); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .sheetpage .copy { fill: var(--ink); }
+  .row.resetblank > .btn { grid-column: 3 / -1; justify-self: start; }
+  .row.resetblank > .quiet { grid-column: 3 / -1; }
+  .numbox { display: flex; min-width: 0; }
+  .numbox > input[type="text"] { flex: none; width: var(--box-value); }
+  .numbox > .steps { flex: none; width: var(--box-steps); }
+  .numbox > .steps > .step { display: grid; place-items: center; min-width: 0; padding: 0; color: var(--ink); }
+  .numbox > .steps > .step:first-child { border-left: 0; }      /* touching the value: its line is the one between */
+  .numbox > .steps > .step > svg { flex: none; }
+  .numbox.alone > input[type="text"] { width: calc(var(--box-value) + var(--box-steps)); }      /* a number with no − + (a font's axis): its box as wide as a whole number box */
   .row.num input[type="text"] { text-align: right; }
   /* the font sheet's two fields (Find a font, a link) are larger than a row's, with a darker line. A row's field for
      words (a window's text, custom labels) is a field like any other (Okay, 13 Oct 2026: "remove input height") */
@@ -35,30 +56,40 @@
   .labelmenu:hover { border-color: var(--ink); }
   .labelmenu > select { position: absolute; inset: calc(-1 * var(--reach-y, 0px)); width: calc(100% + 2 * var(--reach-y, 0px)); height: calc(100% + 2 * var(--reach-y, 0px)); opacity: 0; cursor: pointer; }      /* under a finger the unseen menu is larger than its box (reach) */
   .row > :is(select, .segs, .colour, .single, .tools, .picks, .swatches), .row.txt > input, .row > button:not(:first-child) { grid-column: 3 / -1; }
-  .row > :is(.check, .wide, .picks.five), .row.note > .quiet { grid-column: 1 / -1; }
+  .row > :is(.check, .wide), .row.note > .quiet { grid-column: 1 / -1; }
   .row > .setnote { grid-column: 1 / -1; margin: var(--unit) 0 0; }      /* what a settings file is, over its buttons (#279) */
   .row > .warn { grid-column: 3 / -1; margin: var(--u1) 0 var(--unit); font-size: var(--t-s); color: var(--ink); }      /* the warning under a button that replaces the whole dial (Reset): in ink, not quiet, on the controls' column (Okay, 16 Oct 2026, 10:46) */      /* a tick and its words start at the left edge */
   .row > span:first-child:empty { display: none; }
   .row.nest > .check { grid-column: 3 / -1; }       /* a question about the row above: it starts where the controls start */
-  /* a note is a row of words: as much room over them as under, and a hairline closes it like any row (the row
-     above draws the one over it) */
-  .row.note { min-height: 0; }
-  .row.note > .quiet { padding: var(--unit) 0; }
+  /* a tick or a note starts on the controls' column, wherever it stands in its pane, the first row too (Okay, 19 Oct
+     2026: "The drawing of secondary lines after an adjustment, they start on the column aligned with the upper row.
+     App-wide"; 20:22, Print's Mono print mask moved to that column). Not beside a hand's box (.side: its own columns) */
+  .body .row:not(.side) > .check, .body .row.note:not(.side) > .quiet { grid-column: 3 / -1; }
+  /* a note and the row it explains are one box (design canon §6, #420; Okay, 19 Oct 2026: "hiding the white line …
+     always within the same box that ends with a bottom white border"): no line between them, the box's line under the
+     note. Its words are small and grey, one or two lines; the first follows the row's own line at the panel's line
+     spacing — under a tick's words as a tick's second line would, under controls just below their boxes — and the
+     box ends as far under it as the row's words start above (half of a row's line less a line of text). Under a tick
+     the note starts where its words do; under anything else, on the controls' column (.under, or after the first row). */
+  .row.note { min-height: 0; --note-air: calc((var(--line) - var(--leading) * var(--t-m)) / 2); }
+  .row.note > .quiet { margin-top: calc(-1 * var(--note-air)); padding: 0 0 var(--note-air); font-size: var(--t-s); line-height: var(--leading); text-wrap: balance; }
+  .row:not(.chk, .note) + .row.note > .quiet { margin-top: calc((var(--control) - var(--line)) / 2); }      /* under a field or a slider: just below its box */
+  .row.chk + .row.note > .quiet { padding-left: calc(var(--tick) + var(--tick-gap)); }
+  .row:not(.note):has(+ .row.note:not([hidden])), .row:not(.note):has(+ .row[hidden] + .row.note:not([hidden])) { box-shadow: 0 calc(-1 * var(--hair)) 0 var(--row-rule); background: none; }
+  .row.note:has(+ .row.note:not([hidden])) { box-shadow: none; }
   .row > button:not(:first-child) { justify-self: start; }
   .row > .btn.main:first-child { justify-self: stretch; }      /* a button standing where the label would (PNG) */
   .row.pick { align-items: start; }
   .row.pick > label { line-height: var(--line); }
   .row > label > .short { display: none; }         /* a label's short wording: only where there is little room (a side row) */
   .linkrow .linknote { margin: var(--unit) 0 0; }      /* its length, and that fonts travel by name */
-  /* two numbers to a line (R15 form A2; a window's width and height, #265, 4.46.1): for each a column for its name,
-     one for its slider, one for its quiet number (#250's look) — the slider a column long, the least a slider gets */
-  .row.wsize > * { grid-column: auto; }
-  .row.wsize > label { color: var(--grey); }      /* both names grey, as a row's first is */
-  .row.wsize > .numbox { position: relative; top: auto; right: auto; translate: none; width: 100%; }
+  /* a linked pair (#358; Okay's notes 2: "between their names on the white line a white outline pill appears, knocking
+     out bg. Inside, in text color silkscreen: LINK. Selected, the pill becomes dark filled. Text turns LINKED white"):
+     the pill stands on the line under the first row, starting where the names start, over the next row's line. Width and
+     height were one line, two numbers to it, from 4.46.1 to 4.56 (#265) */
+  .row.haslink { position: relative; }
+  .row.haslink > .linkpill { position: absolute; z-index: 1; grid-column: 1 / -1; grid-row: 1; justify-self: start; left: 0; bottom: 0; translate: 0 50%; display: grid; place-items: center; height: var(--link-pill); padding: 0 var(--u2); border: var(--hair) solid var(--row-rule); border-radius: var(--round-pill); background: var(--surface); color: var(--ink); font: 400 var(--t-pixel)/1 var(--pixel); letter-spacing: 0; }
+  .row.haslink > .linkpill:hover { border-color: var(--grey); }
+  .row.haslink > .linkpill.on { border-color: var(--ink); background: var(--ink); color: var(--white); }
   /* a window's colours on one line (#266, 4.46.1): a quiet word, then its pill; a third (Picture) only for am · pm and moon */
-  .row.colours { align-items: baseline; }      /* when Picture takes a second line, the name stays on the first */
-  .row.colours > .parts { grid-column: 3 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--unit) var(--u3); padding: var(--u1) 0; }
-  .row.colours .part { display: inline-flex; align-items: center; gap: var(--u2); }
-  .row.colours .part[hidden] { display: none; }
-  .row.colours .part > i { font-style: normal; font-size: var(--t-s); color: var(--grey); }
 }

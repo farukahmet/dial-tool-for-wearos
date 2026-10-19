@@ -1,3 +1,8 @@
+// fflate (https://github.com/101arrowz/fflate), vendored by farukahmet's PR #1 (18 Oct 2026) for packing the Wear OS
+// APK. MIT License, Copyright (c) Arjun Barrett (the full text: the project's LICENSE): permission is hereby granted, free of charge, to any person
+// obtaining a copy of this software and associated documentation files, to deal in the Software without restriction,
+// subject to the condition that this copyright and permission notice is included in all copies or substantial portions
+// of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
 // DEFLATE is a complex format; to read this code, you should probably check the RFC first:
 // https://tools.ietf.org/html/rfc1951
 // You may also wish to take a look at the guide I made about this program:

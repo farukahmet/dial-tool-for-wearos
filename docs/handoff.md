@@ -1,34 +1,23 @@
 # Handoff — taking over the Dial Tool
 
-*Written 16 Oct 2026, night, at beta 4.46.5, by the session that built 4.42–4.46.5 (Okay: "devise way to handoff to another agent"). For the next Claude session on this repo. §1 is rewritten at every handover; the rest changes when something new is learnt.*
+*Written 16 Oct 2026 at beta 4.46.5 (Okay: "devise way to handoff to another agent"); §1 rewritten at every handover, last on 19 Oct 2026 at beta 4.89. The rest changes when something new is learnt.*
 
 A new session starts with no memory of the last one: the transcript stays in the old container. Everything a successor needs is in the repo. Use this page to find it.
 
-## 1 · Where things stand (16 Oct 2026, night)
+## 1 · Where things stand (19 Oct 2026, evening, after beta 4.89)
 
-- **Beta 4.46.5** is on `dev`, on `main` and on the live page (https://duztman.github.io/dial-tool/). `main` was 4.41 until tonight.
-- **The plan** is the phases A–J in `docs/build-list.md`, under *From Okay's notes on the dial app* (16 Oct 2026). A–F are done. What's left, in order:
-  1. **One small push, no sketch needed** (4.46.6):
-     - #310: the number popup, third look: the name on top, lighter; the chevron without a box; the value pill as tall as the ± discs; the slider moved up.
-     - #307: NOW darker. The reading is still open: "darker than AM's outlines by 20 %" ≈ a fill of #5C5C5C, with a light word. Say the value when it's built.
-     - #308: the play pulse at slow speeds: much faster, brighter, and an eased fade.
-  2. **G · rings** (4.47–4.48):
-     - #251, #253 and #258 wait for Okay's sketches: ask for them, don't build from the words alone.
-     - #254–#257, #259 and #296 can be built.
-  3. **H · fonts** #273–#276 · **I · text ring** #297 · **J · Gallery** #286–#289.
-- **Loose ends:**
-  - #244: names a screen reader hears.
-  - #294: the specials with no figure from Okay, for him to look through.
-  - #182 and #185: two bugs from 4.36.1, maybe gone since. Check them before fixing.
-- **Okay's Mac copy** is due for a `git pull` (CLAUDE.md, last line). It needs the session linked to his Mac.
-- **Okay's last words**, after 4.46.5: "Release on main, devise way to handoff to another agent."
+- **Beta 4.89** is on `dev`, `main` and the live page (released 19 Oct 2026, 21:26: "publish what we have done this session on main"). It is Okay's *Notes 3* and the session's sketch rounds: R16 (an empty pane hides), R34 (no band-aids), the tick-and-note rule and the tile-row rule (design canon §6), the window tab reordered, Resize Ring from, Positions' circle, the date popup, NOW, the hand's sides, a phone's sheets. Details: `docs/changelog.md`.
+- **The session ran on the sketch loop** (§4b): seven rounds on the private preview page, crops in the chat, one release. Measured: `npm run small` 120–140 s, the full `npm test` about 140 s here, a preview publish seconds. What slowed it most: readings of a drawn note taken without asking (Positions took three rounds: "allow to penetrate" read the wrong way). Ask with a picture when a drawing's direction is open.
+- **Next, in order**: the production debts (build list, *Production debts*, ranked; Claude's proposal, 19 Oct: one session on them before more panel work), then #406, #404 + #421, #329, #339, #349 (*sketch first*), #407.
+- **Waiting for Okay**: the movement (brief §5.1); #395. The cases, the handles under a finger, the APK on a watch, Copy link on WebKit (#332) still to be seen on his devices.
+- **Okay's last words** (19 Oct 2026, 21:26): "publish what we have done this session on main, archive the screenshots and come back. Give me a pdf facsimile with editable text as pdf of the guides popup, ı'll take a crack at it on illustrator."
 
 ## 2 · First steps in a new session
 
-1. `bash tools/setup.sh`: the system library, the Python packages, the two test fonts, `npm install`. Safe to run twice.
+1. `bash tools/setup.sh`: the system library, the Python packages, the two test fonts, `npm install`, and the clone's fetch widened to every branch (a session's clone is shallow, so single-branch; without that `release.sh` builds the live page on a stale `gh-pages` — found 17 Oct). Safe to run twice.
 2. Read what CLAUDE.md lists, in its order. Two places hold the recent work:
    - the last ~25 rows of `docs/brief.md` §4;
-   - the build list's rows #249–#311 with the phases above them.
+   - the build list's open rows under its last two sections, with the phases above them.
 3. `git log --oneline -15 dev` and `docs/versions.md`'s top rows confirm where things stand.
 4. `cd web && npm test > some.log 2>&1` (about 6 minutes). See it pass before changing anything, and look at `web/test/out/`.
 
@@ -46,7 +35,7 @@ A new session starts with no memory of the last one: the transcript stays in the
 5. **Docs:**
    - `docs/changelog.md`: a new section on top.
    - `docs/brief.md` §4: a row after the last one.
-   - `docs/build-list.md`: the item's status, as "done — 4.x.y (…)".
+   - `docs/build-list.md`: a done item's row moves to `docs/build-list-done.md` with its status "done — 4.x.y (…)"; numbers are never reused.
    - The glossary and rules if a word or a rule changed.
 6. **Bump** in three places:
    - `VERSION` in `web/src/geometry.js`;
@@ -73,14 +62,32 @@ A new session starts with no memory of the last one: the transcript stays in the
 - **Final words.** "DONE, NO MORE DISCUSSION", "trust me", "the answer's there": build exactly that, no alternatives.
 - **"Note and move on"**: the note goes to the build list, not into the push at hand.
 - **On round three** of the same fix: stop, measure, ask. It's his rule.
-- **The bigger picture.** He says he dives into details and loses it; flag it when you see it. Tonight's case: `main` was 53 versions behind `dev`.
+- **The bigger picture.** He says he dives into details and loses it; flag it when you see it. A case: `main` had fallen 111 commits behind `dev` by 19 Oct.
+- **His notes mid-work are notes, not stops** (17 Oct): "if new chats come in that means I'm just putting down notes, not to do now in this session. Report later. Go ahead." Put them in the build list under the phase they belong to and carry on.
+- **Minimal input, push through** (17 Oct): "I trust you to push through … Check back with approved fittings before proposing new views. Old stuff trumps what you don't get from my instructions, distances centerings all under rule." So: reuse a fitting he has passed (a menu beside a label, the gripper's measures, the tab look) before drawing anything new; when a reading is open, take the smaller one and say it.
+- **No access → give it up early** and put it under brief §5 (17 Oct: "Quit stuff early like no access and put them under open questions").
+- **Long jobs in parallel** (17 Oct: "Long processes may happen, do other things in parallel"): run `npm test` in the background and read or write docs meanwhile; a subagent fetched the 21 fonts while 4.46.6 was built.
 - **Don'ts:**
-  - Never bring up `try/shadows` again.
   - Don't commit his notes or PDFs as files: quote them into the docs.
   - Don't change the bar's monospace unasked.
   - Don't rebuild the guide unasked.
   - Don't edit `archive/drawbot/`.
 - **"p. N" in the build list** is a page of his PDF *Notes on dial app* (21 pages, on his Google Drive; readable through a Google Drive connector if the session has one). The row's text is the full reading. Ask him for the page if it isn't enough.
+- **Docs state the present** (19 Oct): never write "until 4.x it was…" into a doc, a rule or a code comment; keep his words as the reason, put the change in the changelog.
+
+## 4b · The sketch loop (19 Oct 2026, first session on it)
+
+Okay, 19 Oct 2026: "an agile way of seeing sketches alive and approving … I preview but can't see for real for a while, when my thoughts are collected we do one cycle to review and finesse few rounds then push". The loop:
+
+1. **Start of session.** Say the model. Then trigger every permission at once, before anything else, and tell him to choose "always allow": push to `duztman/dial-tool` (`add_repo` with push), his Mac's `~/Desktop/dial-maker` (folder access), Google Drive (his notes doc), publishing the preview page. Starting should be simple.
+2. **His notes doc** (Google Doc *Dial tool notes*, on his Drive; notes 1 → 3 so far): read it whole at the start. He adds a dated heading per round; read what is under the newest one. Its pictures: export the doc as PDF and `pdfimages` the pages (`read_file_content` shows only "[image]"). Log every new note in the build list under a section of its own before building.
+3. **Sketch rounds.** One round = a few notes built → `npm run small` (about 2 minutes) → a WIP commit on `dev` (no docs, no version bump) → the build published to the **private preview page** (the Artifact *Dial Tool*, the same link every round: copy `web/dial-tool.html` to a fixed scratch path and publish that path) → **crops of only what changed**, before/after when there is a before, with the values used, sent to him in the chat. Crops: `node test/crop.mjs web/test/crops/x.png <tab> <selector> [setup.js]`; a setup that returns a value prints it (measure with it, R21); `CROP_H=2000` for a whole tab, `CROP_W=1180 CROP_H=820` an iPad on its side.
+4. **His replies mid-round** are notes: log them, answer open readings with a picture and one question, carry on. "NOW" at the start of a message means it changes the step in hand.
+5. **The push**, only on his word ("push"): the full `npm test`, the docs written once for the whole batch (changelog, brief §4, build list, rules, canon), one version bump, `tools/release.sh`. Start `npm test` in the background while he reviews: it is ready when he says push.
+6. **End of session: archive the screens** (Okay, 19 Oct 2026: "all test screenshots you took and if i send some through the chat, add them too"), as `archive/screens/<date>/` already does: `okay/` — what he sent through the chat (`/root/.claude/uploads/<session>/`) and the session's pictures from his notes doc, named `time-seen-version-what`; `claude/` — the crops of `web/test/crops/`, named `time-version-what`; `claude/tests-<version>/` — `web/test/out/*.png` of the last full run; a `README.md` with a table for each, what each shows and his words. One commit.
+7. **Report at the end** what made the session faster or slower, with numbers, under §1.
+
+What was measured on 19 Oct 2026 (4.88.2 → 4.89): `npm run small` 120–140 s, the full `npm test` about 6 minutes, a preview publish a few seconds; a round (build, check, publish, crops) about 10 minutes of which the check is 2.
 
 ## 5 · Handing over again
 
