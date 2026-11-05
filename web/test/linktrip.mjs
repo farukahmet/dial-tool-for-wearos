@@ -44,8 +44,8 @@ const differences = (a, b, at = "") => {
 const dials = [
   ["the opener (the guide's First dial)", OPENER],
   ["Okay's watch", OKAYS_WATCH],
-  ...DIALS.map((d) => [`Gallery: ${d.name}`, { ...d.settings, guides: true }]),
-  ...example_dials().map((d) => [`example: ${d.name}`, { ...d.settings, guides: true }]),
+  ...DIALS.map((d) => [`Gallery: ${d.name}`, d.settings]),
+  ...example_dials().map((d) => [`example: ${d.name}`, d.settings]),
 ];
 let longest = 0;
 for (const [name, settings] of dials) {
@@ -66,8 +66,16 @@ for (const [name, settings] of dials) {
   check(G.fresh_settings(read(link(S))).rings[0].custom === "#a1b2c3", "even a text that is all a colour's hex");
 }
 
+// Bevels % moved on a dial whose hands are still the starting hands: every hand is written whole, so the plain dial's
+// hands come back as themselves, not as HAND_BASE (found 25 Oct 2026: a bare `{ bevel }` hand replaced the starting hand)
+{
+  const S = G.fresh_settings({}); S.sh_bevel = 40;
+  const back = G.fresh_settings(read(link(S))), diff = differences(S, back);
+  check(diff.length === 0, `Bevels % on the plain dial keeps its starting hands (hour ${back.ha_hour.len} mm long, ${back.ha_hour.w} wide)${diff.length ? " — " + diff.slice(0, 4).join(" · ") : ""}`);
+}
+
 // an older scheme is recognised, not read: the page opens the First dial with a note (window.mjs checks that)
-check(G.link_kind("#1.fZLRjtsgEEV_~x")?.scheme === 1 && G.link_kind("0.abc")?.scheme === 0 && G.link_kind("#2ABC")?.scheme === 2 && G.link_kind("#3ABC")?.scheme === 3 && G.link_kind("#hello") === null && G.link_kind("") === null,
+check(G.link_kind("#1.fZLRjtsgEEV_~x")?.scheme === 1 && G.link_kind("0.abc")?.scheme === 0 && G.link_kind("#2ABC")?.scheme === 2 && G.link_kind("#3ABC")?.scheme === 3 && G.link_kind("#4ABC")?.scheme === 4 && G.link_kind("#5ABC")?.scheme === 5 && G.link_kind("#hello") === null && G.link_kind("") === null,
   "a link of scheme 0, 1 or 2 is known as one; anything else after # is not a dial");
 
 // Crockford's base 32: any bytes there and back; read forgiving (small letters, O for 0, I and L for 1, dashes)
@@ -78,9 +86,23 @@ check(G.link_kind("#1.fZLRjtsgEEV_~x")?.scheme === 1 && G.link_kind("0.abc")?.sc
   check(/^[0-9A-HJKMNP-TV-Z]+$/.test(text) && same(G.un_base32(text), bytes) && same(forgiving, bytes) && G.un_base32("2U") === null, "base 32: 997 random bytes there and back; small letters, O, I, L and dashes read as meant; U is no letter of it");
 }
 
+// show mode's inks (#545): kept in the file and the session, never in a link; an older file's steps read as mm
+{
+  const S = G.fresh_settings({ w_ink: 8, rings: [{ kind: "numerals", c: [1, 0, 0, 1], ink_d: 2, ink_b: true }] });
+  delete S.version;
+  const old = G.fresh_settings({ w_ink: 8, rings: [{ kind: "numerals", c: [1, 0, 0, 1], ink_d: 2 }] });
+  check(Math.abs(old.w_ink_all - 0.07) < 1e-9 && Math.abs(old.w_inks["#FF0000"].h - 0.28) < 1e-9, `an older file's ink steps become mm: All inks 8 → +${old.w_ink_all} mm, a ring 2 steps up → its colour at ${old.w_inks["#FF0000"].h} mm`);
+  S.w_inks = { "#FF0000": { h: 0.3, two: true, b: 0.12 } }; S.w_ink_all = 0.02; S.windows[0].frame_b = true; S.windows[0].print_h = 0.1;
+  const L = G.lean(S), text = JSON.stringify(L);
+  check(!("w_inks" in L) && !("w_ink_all" in L) && !/ink_b|frame_b|print_h/.test(text), "the inks' heights and splits stay out of a link (R7, R31)");
+  const ring = { role: "ring", fill: [1, 0, 0, 1], ring: { ring: S.rings[0] } };
+  check(Math.abs(G.ink_mm(S, ring) - 0.14) < 1e-9 && Math.abs(G.ink_mm({ ...S, rings: [{ ...S.rings[0], ink_b: false }] }, { ...ring, ring: { ring: { ink_b: false } } }) - 0.32) < 1e-9,
+    "a part on B stands at B's height, on A at A's, All inks at once added to both");
+}
+
 // the key table: every key of the settings has a code, and the table only grows (its first 156 keys stay as they are)
 {
-  const keys = [G.DEFAULTS, G.RING_BASE, G.HAND_BASE, G.WINDOW_BASE].flatMap((o) => Object.keys(o)).filter((k) => !k.startsWith("ui_") && k !== "version");
+  const keys = [G.DEFAULTS, G.RING_BASE, G.HAND_BASE, G.WINDOW_BASE].flatMap((o) => Object.keys(o)).filter((k) => !k.startsWith("ui_") && k !== "version" && !G.NOT_IN_LINK(k));      // the watch's keys never travel in a link (show mode, 22 Oct 2026)
   const missing = [...new Set(keys)].filter((k) => !G.LINK_KEYS.includes(k));
   check(missing.length === 0 && new Set(G.LINK_KEYS).size === G.LINK_KEYS.length, `every settings key has a code, none twice${missing.length ? " — missing: " + missing.join(" ") + " (add them at the table's end)" : ""}`);
   const FROZEN = { count: 156, sha: "9aca7e8183e4ccce" };      // scheme 2's table as built (beta 4.43): changing these is a new scheme (R31)

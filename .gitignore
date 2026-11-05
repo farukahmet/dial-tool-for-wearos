@@ -21,3 +21,5 @@ guide/look/img-*/
 guide/look/out/review/
 guide/look/out/indesign/Dial-Tool-guide/
 web/test/crops/
+web/test/.window-only.run.mjs
+web/node_modules

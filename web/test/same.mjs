@@ -25,11 +25,12 @@ const kinds_seen = new Set();
 // in the page: every element's computed style, in the page's order
 const SNAP = (root_selector) => {
   const out = [];
+  const names = [...getComputedStyle(document.body)].filter((p) => !p.startsWith("--"));      // every property, once: the same list for every element; walking a style declaration itself costs five times as much (measured 25 Oct 2026: 1.0 s → 0.2 s a snapshot)
   const style_of = (e, pseudo) => {
     const cs = getComputedStyle(e, pseudo);
     if (pseudo && (cs.content === "none" || cs.content === "normal")) return "";
     let s = "";
-    for (const p of cs) if (!p.startsWith("--")) s += p + ":" + cs.getPropertyValue(p) + ";";
+    for (const p of names) s += p + ":" + cs.getPropertyValue(p) + ";";
     return s;
   };
   const roots = root_selector ? [...document.querySelectorAll(root_selector)].filter((e) => e.dataset.sameProbe === "1") : [document.body];
@@ -50,8 +51,8 @@ async function open(options) {
   page.setDefaultTimeout(2500);
   page.on("pageerror", (e) => console.log("page error:", e.message));
   await page.addInitScript(() => { Date.now = () => 1791900000000; });      // a still clock, so nothing differs by the hour
-  await page.addInitScript(() => { if (!localStorage.getItem("dial-tool-last")) localStorage.setItem("dial-tool-last", "{}"); });      // the plain starting dial, not the opener (Okay's watch, 4.38.12)
-  await page.addInitScript(() => { if (!localStorage.getItem("dial-tool-folds")) localStorage.setItem("dial-tool-folds", '{"*":false}'); });      // every pane open, as for a visitor who has opened them (#270)
+  await page.addInitScript(() => { setTimeout(() => { if (!localStorage.getItem("dial-tool-last")) localStorage.setItem("dial-tool-last", "{}"); }, 0); });      // the plain starting dial, not the opener (Okay's watch, 4.38.12)
+  await page.addInitScript(() => { setTimeout(() => { if (!localStorage.getItem("dial-tool-folds")) localStorage.setItem("dial-tool-folds", '{"*":false}'); }, 0); });      // every pane open, as for a visitor who has opened them (#270)
   await page.goto("file://" + (process.env.PAGE || process.cwd() + "/dial-tool.html"));      // PAGE=…: another build, to keep its look
   await page.waitForFunction(() => window.dial_tool && window.dial_tool.statik, null, { timeout: 30000 });
   await page.waitForTimeout(300);
@@ -83,6 +84,7 @@ async function pointer(page, name) {
   for (const i of firsts) {
     for (const forced of ["hover", "active", "focus-visible"]) {
       await cdp.send("CSS.forcePseudoState", { nodeId: nodeIds[i], forcedPseudoClasses: forced === "focus-visible" ? ["focus", "focus-visible"] : forced === "active" ? ["hover", "active"] : [forced] });
+      await settled(page);      // a state that animates (a switch's words unfolding) is read once it has arrived, not mid-way (found 25 Oct 2026: the hover widths differed between two saves)
       const rows = await page.evaluate(({ sel, i, SNAP }) => {
         const e = document.querySelectorAll(sel)[i];
         e.dataset.sameProbe = "1";
@@ -97,6 +99,11 @@ async function pointer(page, name) {
   await cdp.detach();
 }
 const unfold = (page) => page.evaluate(() => { for (let n = 0; n < 4; n++) document.querySelectorAll(".pane.folded > .fold").forEach((f) => f.click()); });      // every pane open
+/** every running animation and transition done, or 1.5 s, whichever is first */
+const settled = (page) => page.evaluate(async () => {
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));      // a forced state's transitions begin at the next style pass: let it come first
+  await Promise.race([Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))), new Promise((r) => setTimeout(r, 1500))]);
+}).catch(() => {});
 const tab = async (page, name) => { await page.click(`button[data-tab="${name}"]`); await unfold(page); await page.waitForTimeout(300); };
 const attempt = async (what, run) => { try { await run(); } catch (e) { console.log(`  (state skipped: ${what}: ${String(e.message).split("\n")[0]})`); states["SKIPPED " + what] = []; } };
 
@@ -156,16 +163,16 @@ async function walk(page, screen, with_pointer) {
   await attempt("gallery dial", async () => { await page.click('.gallery a:has-text("Diver")'); await page.waitForTimeout(500); await tab(page, "Rings"); await snap(page, S("Diver from the Gallery, Rings")); await tab(page, "Dial"); await snap(page, S("Diver from the Gallery, Dial")); });
 }
 
-const mouse = await open({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
-await walk(mouse, "mouse", true);
-await mouse.context().close();
-const finger = await open({ viewport: { width: 1180, height: 820 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
-await walk(finger, "finger", false);
-await finger.context().close();
-const phone = await open({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
-await walk(phone, "phone", false);
-await phone.context().close();
+// the three screens at once, each in a browser context of its own (they share nothing but the browser): the mouse's
+// walk, with its pointer states, is the long one, so the three together take about as long as it alone
+const t0 = Date.now();
+await Promise.all([
+  [{ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 }, "mouse", true],
+  [{ viewport: { width: 1180, height: 820 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true }, "finger", false],
+  [{ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true }, "phone", false],
+].map(async ([options, screen, with_pointer]) => { const page = await open(options); await walk(page, screen, with_pointer); await page.context().close(); }));
 await browser.close();
+console.log(`looked in ${Math.round((Date.now() - t0) / 1000)} s`);
 
 const count = Object.values(states).reduce((n, rows) => n + rows.length, 0);
 if (saving) {

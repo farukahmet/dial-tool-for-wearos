@@ -27,7 +27,7 @@
      way in, then the name's line on the same grey; no line between them. */
   .fontbox > .currentwrap { position: relative; padding: var(--font-head-in) var(--font-head-in) 0; background: var(--scroll); }
   .fontbox .fontrow.current { width: 100%; border: 0; background: var(--field); }
-  .fontbox .fontrow.current:hover { background: var(--field); outline: var(--hair) solid var(--rule); outline-offset: calc(-1 * var(--hair)); }
+  @media (hover: hover) { .fontbox .fontrow.current:hover { background: var(--field); outline: var(--hair) solid var(--rule); outline-offset: calc(-1 * var(--hair)); } }
   .fontbox > .currentwrap + .fontname { border-top: 0; background: var(--scroll); }
   /* the language: at the name line's right end, a small white box (Okay's drawing, 18 Oct 2026: "the red marked box has a new place"; inside the preview's cell in 4.51–4.52.2, #273) */
   .fontname .langbox { height: var(--control-s); padding: 0 calc(0.75 * var(--btn-pad)); border-color: var(--rule-light); background: var(--field); color: var(--wait); font-size: var(--t-xxs); }
@@ -40,44 +40,49 @@
   .fontbox .row.num:not(.side) { grid-template-columns: var(--font-label) minmax(0, 1fr) var(--gap) var(--tile-w) 0 var(--tile-w); }
   /* light or dark (#276, 4.51): with the pill on Dark, the sheet's list and every font box take the dark ground and the
      usual names inside them turn over (ink light, paper dark), so what is chosen is light with dark words */
-  .pillswitch { display: flex; border: var(--hair) solid var(--rule); border-radius: var(--round-pill); padding: var(--u1); background: var(--field); }
-  .pillswitch > button { height: calc(var(--control) - 2 * var(--u1) - 2 * var(--hair)); padding: 0 var(--u4); border-radius: var(--round-pill); color: var(--grey); font-size: var(--t-s); }
-  .pillswitch > button.on { background: var(--ink); color: var(--paper); }
   .font-dark :is(.fontlist, .fontbox .fontrow.current) { --field: var(--font-night); --paper: var(--font-night); --ground: var(--font-night-well); --well: var(--font-night-well); --hover: var(--font-night-hover); --select: var(--font-night-select); --rule: var(--font-night-rule); --rule-light: var(--font-night-rule); --ink: var(--font-night-ink); --grey: var(--font-night-grey); --wait: var(--font-night-grey); background: var(--field); color: var(--ink); }      /* a font box: only its preview turns dark; the rest of the box keeps its look (Okay, 18 Oct 2026, notes 2: "On dark mode for fonts … on the left, this should not change the whole block color: only the 1234…, the preview rectangle"; the whole box 4.51–4.53) */
   .font-dark .fontbox .fontrow.current { background: var(--font-night); color: var(--font-night-ink); }
   /* a part of the box that can be put away: the variable axes, the OpenType features. A line with an eye and its name. */
   .partfold { display: flex; align-items: center; gap: var(--unit); width: 100%; height: var(--line); padding: 0 var(--btn-pad); font-weight: 600; text-align: left; }
-  .partfold:hover { background: var(--hover); }
+  @media (hover: hover) { .partfold:hover { background: var(--hover); } }
   .fontbox .tile > .sticker { justify-self: start; }
   .boxpart > .features { padding: 0 var(--btn-pad) var(--btn-pad); }
   .fontbox .btn, .fontbox .styles > button { border-color: var(--rule); color: var(--grey); }
   .fontname .btn { height: var(--control-s); padding: 0 calc(0.75 * var(--btn-pad)); border-color: var(--rule-light); color: var(--wait); font-size: var(--t-xxs); }      /* Lang. and Change…: three quarters of a button, and lighter (Okay, 14 Oct 2026) */
-  .fontbox :is(.btn, .styles > button):hover { border-color: var(--ink); color: var(--ink); }
+  @media (hover: hover) { .fontbox :is(.btn, .styles > button):hover { border-color: var(--ink); color: var(--ink); } }
   /* the font's name · the language · the text's colour · Change…. The whole line opens the font sheet, but for the
-     language and the colour. The colour stands in the ring list's colour column, wherever the line is; the place kept for it is that column's width. */
+     language and the colour. The colour is a pill with its hex, before EN. */
   .fontname { position: relative; display: grid; grid-template-columns: var(--num-columns); align-items: center; padding: var(--unit) var(--frame-pad) var(--unit) 0; cursor: pointer; }
-  .fontname .name { grid-column: 1 / 7; padding: 0 calc(var(--swatch-col) - var(--frame-pad)) 0 var(--btn-pad); color: var(--wait); }      /* the font's name, grey and bold, running up to the colour (Okay, 18 Oct 2026: "We can write the name of the typeface all the way to the swatch now") */
-  .fontname .langs { grid-column: 7 / 10; justify-self: end; }      /* EN, ending where the rows' steppers end */
-  .fontname .colour.mini { position: absolute; top: 50%; translate: 0 -50%; right: calc(var(--swatch-col) + (var(--line-button) - var(--t-m) - 2 * var(--hair)) / 2); }      /* the colour stands in the ring list's colour column ; Change… leaves it room */
+  .fontname .namecol { grid-column: 1 / -1; grid-row: 1; display: flex; align-items: center; min-width: 0; padding: 0 calc(var(--font-colour-at) - var(--frame-pad) + var(--gap)) 0 var(--btn-pad); }      /* the name runs to a gap before the colour */
+  .fontname .name { flex: 1 1 auto; color: var(--wait); font-size: var(--t-l); line-height: calc(var(--t-m) * var(--leading)); translate: 0 calc((var(--t-m) - var(--t-l)) / 2); }      /* the font's name, grey and bold, running up to the colour (Okay, 18 Oct 2026: "We can write the name of the typeface all the way to the swatch now"); --t-l, 2 px larger than the rows' --t-m, its line as tall as before and lifted by half the difference, so the baseline (measured: 19.3 px down the line, before and after) and the left edge stay where they were (Okay, 19 Oct 2026, #408: "Font name 2px bigger but nothing else moves") */
+  .fontname .langs { grid-column: 7 / 10; grid-row: 1; justify-self: end; }      /* EN, ending where the rows' steppers end */
+  .fontname { --font-colour-at: calc(var(--swatch-col) + (var(--line-button) + var(--t-m) + 2 * var(--hair)) / 2 + var(--pill-gap) - var(--hair)); }      /* from the line's right edge to the pill's left: its swatch where the ring list's colour stands, the hex after it, so the two line up (Okay, 21 Oct 2026, 22:57, his drawing: the pill from that line, "FIT HERE", before EN) */
+  .fontname .colour { --well: var(--field); position: absolute; top: 50%; translate: 0 -50%; left: calc(100% - var(--font-colour-at)); }      /* the text's colour, the colour rows' own pill — a white block, swatch and hex (#408; Okay, 23:07: "no need to invent new stuff"): the font box's own grey well is not its */
   .langs { position: relative; }
   .langbox { min-width: var(--control); }
   .fontname .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
   /* the list scrolls, and says so: a slim scrollbar of two pills, a light one the whole height, a darker one for how much is under (Okay, 13 Oct 2026) */
   /* the list scrolls, and says so with a scrollbar the tool draws (an iPad shows its own only while it moves): two slim
      pills in the rows' right margin, a light one the whole height, a darker one for the share in view (Okay, 13 Oct 2026) */
+  .listbox { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; }
   .listwrap { position: relative; display: grid; min-height: 0; }
+  /* the sheet's two tabs (R35): Dial Tool's fonts · Installed, as the hands' tabs, standing on the list's top line */
+  .sheettabs .segs { display: grid; grid-auto-flow: column; grid-auto-columns: max-content; }
+  .sheettabs .tab { height: var(--tab-high); padding: 0 var(--u4); font-weight: 600; }
   .fontlist { height: 100%; border: var(--hair) solid var(--rule); background: var(--field); overflow-y: auto; scrollbar-width: none; }
   .fontlist::-webkit-scrollbar { display: none; }
   .rail { position: absolute; top: var(--unit); bottom: var(--unit); right: calc((var(--btn-pad) - var(--scrollbar)) / 2 + var(--hair)); width: var(--scrollbar); border-radius: var(--round-pill); background: var(--ground); cursor: pointer; touch-action: none; }
   .rail i { position: absolute; top: 0; left: 0; right: 0; border-radius: var(--round-pill); background: var(--rule); }
-  .rail:hover i, .rail.held i { background: var(--grey); }
+  .rail.held i { background: var(--grey); }
+  @media (hover: hover) { .rail:hover i { background: var(--grey); } }
   .rail::after { content: ""; position: absolute; inset: 0 calc(-1 * var(--unit)); }      /* reach: a finger finds it from beside it too */
   /* a line of the font sheet, on three columns: the family's name in its own face · its numerals, all starting on one
      line · what the family has (styles, bold, italic, axes), small. A full hairline between two lines. */
   /* a line: three columns of one width — the name · the numerals · the stickers (Okay, 13 Oct 2026: "X as in X = 10") */
   .fontrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: var(--unit); width: 100%; min-height: var(--head); padding: 0 var(--btn-pad); border-bottom: var(--hair) solid var(--rule); text-align: left; }
-  .fontrow:hover { background: var(--hover); }
-  .fontrow.on, .fontrow.on:hover { background: var(--select); }
+  @media (hover: hover) { .fontrow:hover { background: var(--hover); } }
+  .fontrow.on { background: var(--select); }
+  @media (hover: hover) { .fontrow.on:hover { background: var(--select); } }
   .fontrow :is(.sample, .face) { display: flex; align-items: center; min-width: 0; overflow: hidden; line-height: 1; white-space: nowrap; }
   .fontrow .sample { font-size: var(--t-sample); }
   .fontlist .fontrow .sample { position: relative; left: calc(-1 * (var(--unit) + var(--hair))); }      /* drawn a gap and a hairline to the left, all alike: most numerals' first ink then touches the name column's edge, so they don't look inset (Okay, 14 Oct 2026) */
@@ -85,7 +90,7 @@
   .fontrow .sample svg { display: block; flex: none; }
   .fontrow .face svg { display: block; flex: 0 1 auto; height: auto; max-width: 100%; }      /* a name too wide for its column is drawn smaller; numerals are cut at their column's edge */
   .fontrow .has .sticker { padding-inline: calc(var(--unit) / 3); }      /* a little tighter in the sheet, so even eight stickers take two lines */
-  .fontrow .has { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: var(--u1); padding: var(--unit) 0; }      /* from the column's left edge, on one line as long as it lets them */
+  .fontrow .has { display: flex; flex-wrap: nowrap; justify-content: flex-start; gap: var(--u1); padding: var(--unit) 0; overflow: hidden; mask-image: linear-gradient(to right, var(--black) calc(100% - var(--u4)), transparent); }      /* from the column's left edge, always one line (Okay, 24 Oct 2026, 23:32: "One line"); what doesn't fit fades out at its edge */
   /* a sticker: one thing a family has, in the pixel font at its own size (R32), on a colour of its kind, round
      corners. */
   .sticker { opacity: var(--pixel-ink);      /* the pixel font a little under full strength, on pale and on black alike (Okay, 13 Oct 2026: "Silkscreen too dark on full black, 70%") */
@@ -101,13 +106,13 @@
      (the pixel font at twice its own, R32), grey like the labels beside it; switched on, it is black. */
   .sticker.ui { height: auto; border: var(--hair) solid var(--rule); background: var(--field); color: var(--grey); cursor: pointer; }
   .sticker.ui.big { padding: var(--u1) var(--unit); font-size: calc(2 * var(--t-pixel)); }
-  .sticker.ui:hover { border-color: var(--ink); color: var(--ink); }
+  @media (hover: hover) { .sticker.ui:hover { border-color: var(--ink); color: var(--ink); } }
   .features .tiles:has(> .sticker) { display: flex; flex-wrap: wrap; gap: var(--unit); }
   .partfold.none { color: var(--grey); font-weight: 400; cursor: default; }
-  .partfold.none:hover { background: none; }
+  @media (hover: hover) { .partfold.none:hover { background: none; } }
   .stickerlabel { display: flex; min-width: 0; }
   .axisname { display: flex; align-items: center; gap: var(--unit); min-width: 0; color: var(--grey); white-space: nowrap; }      /* an axis's name, as a label, and its code as a sticker; a press sets the axis back */
-  .axisname:hover { color: var(--ink); }
+  @media (hover: hover) { .axisname:hover { color: var(--ink); } }
   /* the legend: folded to a button beside the squares; open, a window of its own over the foot of the list, two of the
      sheet's columns wide (from over the second button to the right edge), in the open button's grey. Its items one under
      the other, a hairline over each that runs across sticker and meaning; the stickers end before the third column's line,
@@ -116,8 +121,7 @@
   .picker .adding { position: relative; }      /* the legend hangs over it */
   .legend { position: absolute; z-index: 2; left: calc((100% - 2 * var(--unit)) / 3 + var(--unit)); right: 0; bottom: calc(100% + var(--unit)); display: grid;
     grid-template-columns: calc(50% + var(--unit) / 2) minmax(0, 1fr); overflow-y: auto; margin: 0; padding: var(--u6);
-    border: var(--hair) solid var(--rule); background: var(--hover); box-shadow: var(--shadow-light); color: var(--ink); font-size: var(--t-xxs); line-height: 1.3; }      /* a size under the buttons' words */
-  .legend[hidden] { display: none; }
+    border: var(--hair) solid var(--rule); background: var(--hover); box-shadow: var(--shadow-solid-near); color: var(--ink); font-size: var(--t-xxs); line-height: 1.3; }      /* a size under the buttons' words */
   .legendhead { grid-column: 1 / -1; padding-bottom: var(--unit); color: var(--grey); font: 400 var(--t-pixel-legend)/1.25 var(--pixel); text-transform: uppercase; white-space: nowrap; opacity: var(--pixel-ink); }      /* its title across both columns from the top left, on one line, in the pixel font at half a size more (R32's one exception) */
   .legend :is(dt, dd) { padding: var(--unit) 0; border-top: var(--hair) solid var(--rule); }
   .legend dt { display: flex; justify-content: flex-end; align-items: flex-start; padding-right: var(--u3); }
@@ -132,27 +136,41 @@
   /* it floats over the panel: as wide and as high as the panel (from the window's top to the bar, never over the
      bar), its left edge on the panel's third column, where the controls start, so its right part lies over the
      preview; a shadow to its left */
-  .picker { position: fixed; inset: var(--header) auto calc(var(--bar-height) + var(--line)) calc(var(--margin) + var(--lead) + 2 * (var(--col) + var(--gap))); width: var(--panel); max-width: calc(100vw - 2 * var(--margin)); height: auto; max-height: none; margin: 0; padding: 0; border: var(--hair) solid var(--rule); box-shadow: var(--shadow);      /* a light edge (Okay, 13 Oct 2026: "lighter borders") */
+  .picker { position: fixed; inset: var(--header) auto calc(var(--bar-height) + var(--line)) calc(var(--margin) + var(--lead) + 2 * (var(--col) + var(--gap))); width: var(--panel); max-width: calc(100vw - 2 * var(--margin)); height: auto; max-height: none; margin: 0; padding: 0; border: var(--hair) solid var(--rule); box-shadow: var(--shadow-solid);      /* a light edge (Okay, 13 Oct 2026: "lighter borders") */
     background: var(--paper); color: var(--ink); }
-  .picker[open] { display: grid; grid-template-rows: auto 1fr auto; gap: var(--u4); padding: var(--u6) var(--margin) var(--margin); }
+  .picker[open] { display: grid; grid-template-rows: auto 1fr auto; gap: 0; padding: var(--u6) var(--margin) var(--margin); }
   .picker:focus { outline: none; }
   .picker::backdrop { background: none; }          /* the dial keeps its true colours while you choose */
-  .picker header { display: flex; align-items: center; justify-content: space-between; gap: var(--gap); }
+  /* the sheet's top: the title, Light · Dark between it and Find (the same room either side), Find at the right. The
+     filters' box hangs from Find, as wide as it, down onto the list's top line — a tab of the list, as Dial Tool's fonts ·
+     Installed are at the left (R35, "growing out of searchbar"; Okay, 24 Oct 2026: "Pills inside a box that's attached to
+     the search bar"; "The tab can shrink and attach to lower window"). One outline: Find open at its foot, the box open
+     at its top and foot, standing on the list's line */
+  .picker header { display: grid; grid-template-columns: max-content minmax(0, 1fr) var(--find); align-items: start; }
+  .picker header > h2 { grid-row: 1; grid-column: 1; }
+  .picker header > .pillswitch { grid-row: 1; grid-column: 2; justify-self: center; }
+  .picker header > .findbox { grid-row: 1; grid-column: 3; }
+  .picker header > .sheettabs { grid-row: 2; grid-column: 1 / 3; align-self: end; }
+  .picker header > .findtray { grid-row: 2; grid-column: 3; }
   /* Find: at the sheet's top right, as wide as the stickers' column under it; a magnifier in it, no words */
-  .picker header > .find { position: relative; width: var(--find); }
-  .picker header > .find > input { width: 100%; padding-right: var(--control-large); }
-  .picker header > .find > input::-webkit-search-cancel-button { -webkit-appearance: none; }
-  .picker header > .find > svg { position: absolute; right: var(--u3); top: 50%; translate: 0 -50%; color: var(--grey); pointer-events: none; }
+  .picker header > .findbox { display: grid; }
+  .findbox > .find { position: relative; }
+  .findbox > .find > input { width: 100%; padding-right: var(--control-large); border: var(--hair) solid var(--grey); border-bottom: 0; }
+  .findbox > .find > input::-webkit-search-cancel-button { -webkit-appearance: none; }
+  .findbox > .find > svg { position: absolute; right: var(--u3); top: 50%; translate: 0 -50%; color: var(--grey); pointer-events: none; }
   .picker header h2 { font-size: var(--t-l); }
+  /* the filters (R35): six pills in the box, each as wide as its word (Okay: "Not equal pills. All pills fit word shapes like gloves"), on as few lines as the box allows, one after another as words are */
+  .findtray { display: flex; flex-wrap: wrap; align-content: start; gap: var(--u1); padding: var(--u1); border: var(--hair) solid var(--grey); border-block: 0; background: var(--field); }
+  .filterpill { flex: none; height: calc(var(--control) - 2 * var(--u1)); padding: 0 var(--u1); border: var(--hair) solid var(--rule); border-radius: var(--round-pill); color: var(--grey); font-size: var(--t-xs); white-space: nowrap; }
+  @media (hover: hover) { .filterpill:hover { color: var(--ink); } }
+  .findtray.away > * { visibility: hidden; }      /* on the Installed tab: fonts found by name, no filters (R35); the box stays, so the outline and the list don't move */
   .picker .fontlist { min-height: 0; }
-  .picker .adding { display: grid; gap: var(--u4); }      /* straight under the list: its edge is the line between them */
+  .picker .adding { display: grid; gap: var(--u4); padding-top: var(--u4); }      /* straight under the list: its edge is the line between them */
   .picker .squares { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--unit); }      /* on the list's three columns */
   /* the squares: shorter, a sign beside two lines of words (Okay, 13 Oct 2026: "shorter"); they set the height of the
      sheet's foot. The legend's button is the last of them, at the right. */
   /* the ways to add a font share the first two columns equally (two: each a column; three: each a third of the two) */
   .picker .squares > .adds { grid-column: 1 / 3; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--unit); }
-  .picker .squares .adds.three > .pickt small, .picker .squares .adds.three > .pickt br { display: none; }      /* three in the room of two: no second lines */
-  .picker .squares .adds.three > .pickt span { white-space: normal; }
   .picker .squares .pickt { grid-template-columns: auto minmax(0, 1fr); justify-items: start; align-items: center; align-content: center; column-gap: var(--unit); min-height: var(--u8); padding: var(--unit) var(--u3); text-align: left; }
   .picker .squares .pickt span { white-space: nowrap; text-align: left; }
   .picker .squares .pickt { overflow: hidden; }      /* a word longer than its box is cut at the box's edge (Okay, 15 Oct 2026, 07:12: "cutoff the text and leave it") */
@@ -161,6 +179,6 @@
   .picker .squares > .legendbutton[aria-expanded="true"] svg { rotate: 180deg; }
   .picker .squares > .legendbutton[aria-expanded="true"] { background: var(--hover); }      /* open: the legend's grey */
   #window-font-back { justify-self: start; display: inline-flex; align-items: center; gap: var(--unit); border-color: var(--rule); background: none; color: var(--grey); opacity: var(--pixel-ink); }      /* Copy style of <the numerals ring>: a box with a copy sign and no fill, quiet; the ring's name in italic (Okay, 13–14 Oct 2026) */
-  #window-font-back:hover { opacity: 1; border-color: var(--ink); color: var(--ink); }
+  @media (hover: hover) { #window-font-back:hover { opacity: 1; border-color: var(--ink); color: var(--ink); } }
   .partfold .many { color: var(--grey); font-weight: 400; }      /* how many switches */
 }

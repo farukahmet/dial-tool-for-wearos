@@ -4,24 +4,69 @@
      rest, a middle grey under the pointer, black while its pop-out is open (no outlines). A swatch shows its colour
      (--c) over a checkerboard, so a see-through colour looks see-through. */
   .colour { display: inline-flex; align-items: center; gap: var(--pill-gap); justify-self: start; height: var(--pill); padding: 0 var(--pill-gap);      border-radius: var(--round-small); background: var(--well); font: var(--t-s)/1 var(--mono); }
-  .colour:hover { background: var(--rule); }
+  @media (hover: hover) { .colour:hover { background: var(--rule); } }
   .colour[aria-expanded="true"] { background: var(--ink); color: var(--paper); }
   .swatch, .dot { flex: none; width: var(--dot); height: var(--dot); border: var(--hair) solid var(--chip-rule); border-radius: var(--round-small); background: linear-gradient(var(--c, transparent), var(--c, transparent)), var(--checker); }
   .colour .dot { width: 1em; height: 1em; border-radius: var(--round-tiny); }      /* as large as its hex */
   .dot.tiny { display: inline-block; width: var(--dot-tiny); height: var(--dot-tiny); border-radius: var(--round-tiny); vertical-align: calc(-1 * var(--hair)); }
   .colour[aria-expanded="true"] .dot { border-color: var(--night-chip-rule); }
-  .swatch:hover { border-color: var(--ink); }
+  @media (hover: hover) { .swatch:hover { border-color: var(--ink); } }
   /* colours in a list (Dial → Colours, a band's sectors): square swatches in a row that wraps */
   .swatches { display: flex; flex-wrap: wrap; gap: var(--chip-gap); padding: var(--chip-gap) 0; }
   .swatches .swatch { width: var(--control); height: var(--control); border-radius: var(--round-small); }
+  /* show mode's Dial tab (#545, its look #546; Okay, 25 Oct 2026: "All colors aligned on a line like rings on main but
+     appropriate to this view. Tiny marks, secondary labels … don't use allcaps everywhere"). Every line of Colours, Inks
+     and Hands stands on the same five columns: the eye (an ink's fold, a part's A or B) · the kind mark (the ring
+     list's) · the name · the swatch column (a lone colour a pill with its hex, several squares from its left) · the
+     height box. A Colours line has no height: its squares may run on to the line's end, six to a line. */
+  .colourlist > .row.showline { position: relative; grid-template-columns: var(--kind-pic) minmax(0, 1fr) var(--pill-w) var(--side-num); column-gap: var(--u2); }
+  .colourlist > .row.showline > * { grid-column: auto; }
+  /* the first place — a line's eye, an ink's fold, a part's A or B — stands in the panel's left column, under the panes'
+     own eyes, so the line's tiny mark leads it (Okay, 25 Oct 2026, 22:02: "Eyes and icons won't gel … Check if pushing
+     eyes to left column work") */
+  .colourlist > .row.showline > :first-child { position: absolute; top: 0; bottom: 0; left: calc(var(--nudge) - var(--eye) - var(--gap)); width: var(--eye); }      /* as a heading's eye stands: its column, its nudge */
+  .colourlist > .row.showline > .eye { display: grid; place-items: center; color: var(--grey); }
+  .colourlist > .row.showline > .eye[aria-pressed="true"] { color: var(--ink); }
+  @media (hover: hover) { .colourlist > .row.showline > .eye:hover { color: var(--ink); } }
+  .colourlist > .row.showline.off > :is(.mark, label, .single, .swatches) { color: var(--rule); opacity: 0.5; }      /* a part hidden on the watch: its line greys, as a hidden ring's in main's list (#547) */
+  .colourlist > .row.showline > .mark { display: grid; place-items: center; height: 100%; color: var(--grey); }      /* a tiny mark, quiet beside the name */
+  .colourlist > .row.showline > label { color: var(--grey); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .colourlist > .row.showline > :is(.colour, .single) { justify-self: start; }
+  .colourlist > .row.showline > .single { display: flex; }
+  .colourlist > .row.showline > .swatches { display: flex; flex-wrap: wrap; align-items: center; gap: var(--chip-gap); padding: var(--chip-gap) 0; }
+  .colourlist > .row.showline .swatch { width: var(--dot); height: var(--dot); border-radius: var(--round-small); }      /* several colours, or a Hands line's: the small swatch the dial side picks from (Okay, 25 Oct 2026, 22:50: "these swatches are big … ui on left either uses small swatches or labelled code, do the same") */
+  .colourlist > .row.showline .note { flex: 1 1 auto; min-width: 0; margin-left: var(--u2); color: var(--grey); font-size: var(--t-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }      /* what the squares are: "12 sectors", "hand · cap" */
+  .colourlist > .row.showline > .place { display: flex; justify-content: end; }
+  .colourlist > .row.showline .numbox { --box-value: var(--box-side-value); --box-steps: calc(2 * var(--box-side-step)); }
+  .colourlist > .row.showline .numbox > input { text-align: right; }      /* as a number row's */
+  .colourlist > .row.showline.bare > :is(.single, .swatches) { grid-column: 3 / -1; }
+  .colourlist > .row.showline > .swatches { flex-wrap: nowrap; }
+  .colourlist > .row.showline > .swatches > .dots { flex: none; display: flex; flex-wrap: wrap; gap: var(--chip-gap); max-width: calc(6 * var(--dot) + 5 * var(--chip-gap)); }      /* six swatches a line (Okay: "Six to a line, two lines"), the note beside them */
+  .colourlist > .row.showline.bare > .place { display: none; }
+  /* a group's name (Rings · Hands · Windows; On the dial · On the discs · Disc depths): grey, sentence case, at the rows'
+     size, as the Shadows pane's Part Heights; a pane's number column named at its heading's end, small and grey */
+  .colourlist > .row.showsub { display: flex; align-items: end; min-height: var(--line); padding-bottom: var(--u2); }
+  .colourlist > .row.showsub .colhead { color: var(--grey); font-size: var(--t-s); }
+  .pane > .colhead { justify-self: end; margin-left: auto; color: var(--grey); font-size: var(--t-xs); }
+  /* Inks: its lines on the same columns; the ink's fold in the eye's place, its part count as its name */
+  .inklist .chev { display: grid; place-items: center; color: var(--grey); }
+  .inklist .chev:not(.open) svg { transform: rotate(-90deg); }      /* one chevron, turned (icon canon: "up is the same, turned") */
+  @media (hover: hover) { .inklist .chev:hover { color: var(--ink); } }
+  .inklist > .row.inkline > label { color: var(--ink); }
+  .inklist > .row.inkline.open > .place.two { display: flex; align-items: center; justify-content: end; gap: var(--u3); color: var(--grey); }      /* Two inks in the number's place, its word right against it */
+  .inklist > .row.inkpart > .letter { display: grid; place-items: center; color: var(--ink); }      /* an ink of two parts: A or B as a word, in the eye's place */
+  .row.bevels { grid-template-columns: auto minmax(0, 1fr); }
+  .row.bevels > label { grid-column: 1; }
+  .row.bevels > .pillswitch { grid-column: 2; justify-self: end; flex-wrap: nowrap; }      /* its name, then its pills to the line's end, on one line */
+  .inklist .pillswitch.ab > button { padding: 0 var(--u2); }      /* the pill fits the swatch column, a gap before the name */
   .swatch[aria-expanded="true"] { outline: var(--thick) solid var(--ink); outline-offset: var(--hair); }
 
   /* the colour pop-out: one for the whole tool, at the right of the swatch that opened it. Near black, round corners. Inside it the usual colour names are set to their night values, so
      buttons and fields look as they do elsewhere, light on dark. Its head drags it. Rows of colours: a name, then the
      chips. Then the field of one hue, the strip of hues and (rings only) the strip of how see-through, tall enough
      for a finger. Last, one line: RGB · CMYK · HEX, the colour, the values, COPY — small, boxed, capitals. */
-  .colourpop { position: fixed; z-index: 5; display: grid; gap: var(--pop-gap); width: var(--pop-width); max-width: 100vw; max-height: 100vh; padding: 0 var(--pop-pad) var(--pop-pad); }
-  .colourpop[hidden] { display: none; }
+  .colourpop { position: fixed; z-index: 8;      /* over the canvas lists (Guides 7, Shadows 6): it opens last, so it stands on top; under the tags and the controller (30) */
+    display: grid; gap: var(--pop-gap); width: var(--pop-width); max-width: 100vw; max-height: 100dvh; padding: 0 var(--pop-pad) var(--pop-pad); }
   .colourpop header { display: flex; align-items: center; height: var(--head); cursor: grab; touch-action: none; user-select: none; border-bottom: var(--hair) solid var(--row-rule); }
   .colourpop header h2 { flex: 1; overflow: hidden; text-overflow: ellipsis; }
   .colourpop header .sign { border-radius: var(--round-small); }
@@ -42,7 +87,6 @@
   :is(.hue, .alpha) i { top: 50%; width: calc(var(--knob) * 0.5); height: calc(var(--pop-hue) + var(--u1)); border-radius: var(--knob); }
   .alpha i { background: var(--solid, var(--black)); }
   .alpharow { display: flex; align-items: center; gap: var(--gap); }
-  .alpharow[hidden] { display: none; }
   .alpharow input { flex: none; width: var(--col); text-align: center; }
   .asnumbers { display: flex; gap: var(--chip-gap); align-items: center; font-size: var(--t-xs); letter-spacing: 0.04em; text-transform: uppercase; }
   .asnumbers .segs { flex: none; }

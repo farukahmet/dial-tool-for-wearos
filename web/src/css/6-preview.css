@@ -21,72 +21,102 @@
   .guides:has(.guidelist:not([hidden])) { z-index: 1; }      /* its list over the case and X-ray under it */
   /* the case's switch (in the top right corner, under Guides): its kind's name and a chevron, as Backdrop is a word and its chip; the
      system's list over it, unseen; with a case on, its outline solid like a switch that is on */
-  .casebox { position: relative; gap: var(--unit); padding: 0 0 0 var(--u3); border-radius: var(--round-switch); }
+  .casebox { --sign-w: var(--sign-18); position: relative; gap: 0; padding: 0 calc((var(--control-large) - 2 * var(--hair) - var(--sign-w)) / 2); border-radius: var(--round-switch); }
   /* its chevron in a square of its own behind a line, as Guides' and Shadows' are (4.82; Okay, 19 Oct 2026: "Case icon
      and its spacing need work"): the sign u3 from the left as theirs, the word u4 clear of the line */
-  .casebox .arrow { align-self: stretch; display: grid; place-items: center; width: var(--control-large); margin-left: calc(var(--u4) - var(--unit)); border-left: var(--hair) solid var(--line-faint); }
-  .casebox:not(.on) .arrow { border-left-style: dotted; }
-  .casebox > select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+  .casebox .arrow { align-self: stretch; display: grid; place-items: center; }      /* folded with the word, no square of its own (the switches' words, below) */
   .casebox:not(.on) { border-style: dotted; }      /* not on: its outline dotted — shorter dashes, shorter gaps, a denser line (Okay, 19 Oct 2026: "Dashes for invisible: shorter dash shorter gaps, denser outline") */
-  .casebox.on > :not(select) { opacity: 1; }
-  /* its strap's switch (4.69): the strap's chip, a button of its own, then its kind's name and chevron with the list over
-     those only — so a press on the chip opens the colour, a press on the words the list */
-  .strapbox { padding-left: var(--u3); }
-  .strapbox .strapkind { position: relative; display: flex; align-items: center; gap: var(--unit); align-self: stretch; }
-  .strapbox .strapkind > select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-  .strapbox .dot { padding: 0; border-color: var(--on-canvas); cursor: pointer; }
-  .strapbox.on > * { opacity: 1; }
+  .casebox.on > :is(.sign, svg) { opacity: 1; }      /* on: its sign alone lights; the word stays dim but under the pointer (Okay, 20 Oct 2026, 02:37: "when on, only the icon lights up. Labels stay dim at all times, except hover") */
   /* the selected ring's handles on its guides (4.65; farukahmet's PR #2, Okay: "all these handles should be in guide
      color"): filled with the ring's guide colour (--handle, app.js), a hairline of white round them so they read on any
      dial; a reach of a fingertip round each, unseen */
-  .handles .handle { fill: var(--handle); stroke: var(--white); stroke-width: 1.5; cursor: grab; pointer-events: all; }
+  .handles .handle { fill: var(--white); stroke: none; cursor: grab; pointer-events: all; }      /* the handle's sign in white on its disc */
   .handles .handle .reach { fill: transparent; stroke: none; }
+  .handles .handle .seat { fill: var(--handle); stroke: var(--white); stroke-width: var(--glow-line); }      /* the disc a handle sits in: its guide's colour, solid, a white hairline round it (#486; Okay, 04:52: "No transparency on handles, backgrounds solid") */
   .handles.dragging .handle { cursor: grabbing; }
-  #app.show .handles { display: none; }
   /* Tiny Preview (#337): its button where Guides stood, a plain eye; the dial at its own size in a little window over
      everything, the backdrop round it, a hard shadow, dragged anywhere; the eye at its top left puts it away */
-  .tinyopen { position: absolute; z-index: 3; right: var(--canvas-inset); bottom: calc(var(--canvas-inset) + var(--control-large) + var(--unit)); width: var(--control-large); border-radius: var(--round-switch); }      /* over the dial-alone eye, a unit between (4.82; Okay, 19 Oct 2026: "Move tiny preview button below, stacked on top of preview. Showcase not moved"; top right, where Guides stood, until 4.81) */
+  .tinyopen { position: absolute; z-index: 3; right: var(--canvas-inset); bottom: calc(var(--canvas-inset) + 2 * (var(--control-large) + var(--unit))); width: var(--control-large); border-radius: var(--round-switch); }      /* over the dial-alone eye, a unit between (4.82; Okay, 19 Oct 2026: "Move tiny preview button below, stacked on top of preview. Showcase not moved"; top right, where Guides stood, until 4.81) */
   .tinywin { position: fixed; z-index: 60; overflow: hidden; border: var(--thick) solid var(--ink); border-radius: var(--tiny-round); box-shadow: var(--tiny-cast) var(--tiny-cast) 0 var(--tiny-shade); cursor: grab; touch-action: none; user-select: none; }
   .tinywin.held { cursor: grabbing; }
   .tinyface > svg { display: block; }
-  .tinyshut { position: absolute; top: var(--u2); left: var(--u2); display: grid; place-items: center; width: var(--control); height: var(--control); padding: 0; border-radius: 50%; background: var(--paper); color: var(--ink); opacity: 0; transition: opacity 0.15s; }
-  .tinywin:hover .tinyshut, .tinywin.awake .tinyshut, .tinyshut:focus-visible { opacity: 1; }
+  .tinyshut { position: absolute; top: var(--u2); left: var(--u2); display: grid; place-items: center; width: var(--control); height: var(--control); padding: 0; border-radius: 50%; background: var(--paper); color: var(--ink); opacity: 0; transition: opacity var(--tiny-fade); }
+  .tinywin.awake .tinyshut, .tinyshut:focus-visible { opacity: 1; }
+  @media (hover: hover) { .tinywin:hover .tinyshut { opacity: 1; } }
   .onview { display: flex; align-items: center; justify-content: center; height: var(--control-large); border: var(--hair) solid var(--line-faint); color: var(--on-canvas); user-select: none; }
   @media (hover: hover) { .onview:hover { box-shadow: inset 0 0 0 var(--hair) var(--on-canvas); } }      /* under the pointer its line is twice as thick: still no fill */
   /* undo · redo, before the Guides switch: two joined outlined buttons; pale when there is no step that way */
-  .undos { position: absolute; z-index: 3; top: var(--canvas-top); left: max(var(--canvas-inset), calc(var(--title-end) + var(--gap) - var(--panel-w) * (1 - var(--away)))); display: flex; align-items: flex-start; gap: var(--unit); }      /* undo · redo, then Case and its Strap (4.82); top left of the preview, beside the panel; the dial alone, they ride left with the preview's edge and stop short of the title (a gap after it) */
+  .undos { position: absolute; z-index: 3; top: var(--canvas-top); left: max(var(--canvas-inset), calc(var(--title-end) + var(--gap) - var(--panel-w) * (1 - var(--away)))); display: flex; align-items: flex-start; gap: var(--unit); }      /* undo · redo, then Versions on the same line, a unit after them (#517; Okay, 24 Oct 2026: "Versions go up, right of the top row buttons"); top left of the preview, beside the panel; the dial alone, they ride left with the preview's edge and stop short of the title (a gap after it) */
   .undopair { display: flex; }
+  .undos:has([aria-expanded="true"]) { z-index: 6; }      /* with its steps or Versions open, over the switches lower down (Backdrop, the Tiny Preview) */
   .undobox { width: var(--control-large); }
   .undobox:first-child { border-radius: var(--round-switch) 0 0 var(--round-switch); }
-  .undobox:last-child { border-left: 0; border-radius: 0 var(--round-switch) var(--round-switch) 0; }
+  .undobox + .undobox { border-left: 0; }
+  .undobox:not(:first-child) { border-radius: 0; }
+  .undobox.historymore { border-radius: 0 var(--round-switch) var(--round-switch) 0; }      /* the steps' chevron closes the row (#172) */
+  .undopair { position: relative; }
+  .historymore[aria-expanded="true"] svg { rotate: 180deg; }
+  /* the steps, named (#172): the guides' list's make (.night), under undo; a step a line, the newest first; the ones redo
+     would bring back faint, over a "Now" line. Function first: its look is to be designed with Okay */
+  /* the undo history (Okay, 23 Oct 2026: "no thinlines no round/sharp clash, simple rounded corner black popup, 1px line
+     (spanning the margins as well) between items"): one rounded night part; its lines plain words, each under a hairline
+     across its whole width */
+  .historylist { position: absolute; z-index: 5; top: calc(100% + var(--unit)); left: 0; display: grid; min-width: calc(6 * var(--control-large)); max-height: 60dvh; overflow-y: auto; padding: 0;
+    border-radius: var(--round-switch); background: var(--night); color: var(--white); }
+  .historylist > * { margin: 0; padding: var(--u2) var(--pop-pad); text-align: left; white-space: nowrap; }
+  .historylist > * + * { border-top: var(--hair) solid var(--night-rule); }
+  .historylist > .histitem { border-radius: 0; background: none; color: inherit; }
+  .historylist > .histitem:hover { background: var(--night-hover); }
+  .historylist > .histitem.ahead { opacity: var(--faint); }
+  .historylist > :is(.nowline, .quiet) { color: var(--grey); }
   /* what stands on the preview is faint, so the dial is what one sees. Three states, all by how
      much shows (opacity; the line by the same share of its colour), so they hold on any backdrop:
        can be pressed    line and what is in it at --faint; whole under a pointer, with the keyboard on it, or open
-       can't be pressed  (no step to undo) half of --faint, and nothing under the pointer
+       can't be pressed  (no step to undo) its line as faint as the others', what is in it at half of --faint, nothing under the pointer
        on                (Guides) its word alone is whole; its line stays faint until the pointer is on it */
-  main { --line-faint: color-mix(in srgb, var(--on-canvas) calc(var(--faint) * 100%), transparent); --line-fainter: color-mix(in srgb, var(--on-canvas) calc(var(--faint) * 50%), transparent); }
-  .onview > * { opacity: var(--faint); }
+  main { --line-faint: color-mix(in srgb, var(--on-canvas) calc(var(--faint) * 100%), transparent); }
+  .onview > :not(select) { opacity: var(--faint); }      /* a switch's parts; the list over a menu switch (Case) stays unseen, always (Okay, 23 Oct 2026: "system dropdown is no more") */
   .onview:is(:focus-visible, [aria-expanded="true"]) { border-color: var(--on-canvas); }
-  .onview:is(:focus-visible, [aria-expanded="true"]) > * { opacity: 1; }
+  .onview:is(:focus-visible, [aria-expanded="true"]) > :not(select) { opacity: 1; }
   /* only where a pointer can hover: under a finger "hover" stays on after a tap, and the switch just pressed would stay whole */
   @media (hover: hover) {
     .onview:hover { border-color: var(--on-canvas); }
-    .onview:hover > * { opacity: 1; }
+    .onview:hover > :not(select) { opacity: 1; }
   }
-  .guidesbox[aria-pressed="true"] > * { opacity: 1; }      /* on: its sign and its word whole (Okay, 15 Oct 2026, 02:06: "when on the icon is black too. Same goes for shadows") */
-  .undobox.none, .undobox.none:hover { border-color: var(--line-fainter); box-shadow: none; }
-  :is(.undobox.none, .undobox.none:hover) > * { opacity: calc(var(--faint) / 2); }
-  .guidesbox { gap: var(--unit); padding: 0 var(--u4) 0 var(--u3); border-radius: var(--round-switch) 0 0 var(--round-switch); }      /* on, its word is whole (black or white), never bolder (Okay, 14 Oct 2026: "when active label does not get bolder, just gets black") */
+  .guidesbox[aria-pressed="true"] > svg { opacity: 1; }      /* on: its sign whole, in black or white (Okay, 15 Oct 2026, 02:06: "when on the icon is black too. Same goes for shadows"); its word stays dim but under the pointer (20 Oct 2026, 02:37: "when on, only the icon lights up. Labels stay dim at all times, except hover") */
+  /* Versions, under undo (#435): a switch with its sign and word, as Backdrop's; its list drops under it — the panel's
+     ground, its cards as wide as the Gallery's (the panel's width). Function first: its look is to be designed with Okay */
+  .versions { position: relative; display: flex; }
+  .versionsbox { --sign-w: var(--sign-16); gap: 0; padding: 0 calc((var(--control-large) - 2 * var(--hair) - var(--sign-w)) / 2); border-radius: var(--round-switch); }
+  .versionlist { position: absolute; top: calc(100% + var(--unit)); left: 0; width: var(--panel-w); max-width: calc(100vw - 2 * var(--canvas-inset)); max-height: var(--list-room); overflow-y: auto; padding: 0 var(--pop-pad); border: var(--hair) solid var(--ink); border-radius: var(--round-switch); background: var(--paper); color: var(--ink); }
+  .versionline { display: flex; gap: var(--unit); }
+  #instance-cards a { touch-action: none; }      /* a finger on a card arranges, not scrolls (the list scrolls by its edge) */
+  #instance-cards a.arranging { z-index: 2; opacity: 0.85; cursor: grabbing; }
+  /* Compare (#435): the saved dials on the backdrop, in the room the switches leave, placed by compare_place() */
+  .compareview { position: absolute; z-index: 2; inset: var(--compare-pad) calc(var(--canvas-inset) + var(--control-large) + var(--unit)); display: none; }      /* clear of the two rows of switches at the top and at the foot, the same room over and under, so the block sits on the preview's middle */
+  main.comparing { --compare-pad: calc(var(--canvas-inset) + 2 * (var(--control-large) + var(--unit))); background: var(--canvas-fill); }      /* the backdrop is the preview's own picture, hidden with the dial: its colour painted behind */
+  main.comparing .compareview { display: block; }
+  main.comparing > :is(svg, .tip) { visibility: hidden; }
+  .comparedial { position: absolute; width: var(--compare-d); height: var(--compare-d); }
+  .comparedial > svg { display: block; width: 100%; height: 100%; }
+  .comparedial.pick { cursor: pointer; }      /* a set's dial from a link: a press edits it (#523) */
+  /* a set from a link (#523): the preview note's look, its question and two buttons on one line */
+  .setoffer { display: flex; align-items: center; gap: var(--unit); }
+  .offerbtn { padding: var(--u1) var(--u3); border: var(--hair) solid var(--white); background: none; color: var(--white); font: inherit; cursor: pointer; }      /* its buttons, drawn for the note's dark ground */
+  .offerbtn.main { background: var(--white); color: var(--ink); }
+  .undobox.none { border-color: var(--line-faint); box-shadow: none; cursor: default; pointer-events: none; }      /* no step that way: its outline as the others' (Okay, 21 Oct 2026, 23:34: "keep outlines as others while inactive"), its sign paler, nothing under a pointer or a finger */
+  @media (hover: hover) { .undobox.none:hover { border-color: var(--line-faint); box-shadow: none; cursor: default; pointer-events: none; } }      /* under the pointer as at rest */
+  .undobox.none > * { opacity: calc(var(--faint) / 2); }
+  .guidesbox { --sign-w: var(--sign-18); gap: 0; padding: 0 calc((var(--control-large) - 2 * var(--hair) - var(--sign-w)) / 2); border-radius: var(--round-switch) 0 0 var(--round-switch); }      /* on, its word is whole (black or white), never bolder (Okay, 14 Oct 2026: "when active label does not get bolder, just gets black") */
   .guidesmore { width: var(--control-large); border-left: 0; border-radius: 0 var(--round-switch) var(--round-switch) 0; }
   .guidesmore[aria-expanded="true"] svg { rotate: 180deg; }      /* open, only its arrow turns */
   /* Backdrop, standing on the Shadows switch (its row held the eye switch too until 15 Oct 2026, 03:41) */
   .backdrops { position: absolute; z-index: 3; left: var(--stop-short); bottom: calc(var(--canvas-inset) + var(--control-large) + var(--unit)); display: flex; flex-direction: column-reverse; align-items: flex-start; gap: var(--unit); }      /* Backdrop over Shadows at the bottom left (Okay, 19 Oct 2026: "Guides case and xray move top right corner") */
   .casebox .sign, .xraybox > svg { display: grid; flex: none; }
-  .xraybox { padding-right: var(--u4); }      /* no chevron after its word: as much room after it as Backdrop's (4.86; Okay: "Xray's box needs padding after label") */
   .tinyopen .x { display: none; }      /* its sign is the showcase's of 4.85, whose X is the showcase's way out */
   .casebox .sign { width: auto; }      /* its drawing's own 18, not a sign's 26 (4.82: four points stood empty either side of it) */
   /* the eye switch, alone at the preview's bottom right, over the zoom in the bar (Okay, 15 Oct 2026, 03:41) */
-  .eyes { position: absolute; z-index: 3; right: var(--canvas-inset); bottom: var(--canvas-inset); display: flex; align-items: flex-end; gap: var(--unit); }      /* the switches' gap between them (05:43: "why these two touch?"); the showcase's iris left of the eye, one unit apart (Okay, 18 Oct 2026, notes 2: "Showcase button back to the left of the preview button"; over it from 4.42.4 to 4.52.1, #280) */
+  .eyes { position: absolute; z-index: 3; right: var(--canvas-inset); bottom: var(--canvas-inset); display: flex; flex-direction: column; align-items: flex-end; gap: var(--unit); }      /* the iris above the eye, in both modes (Okay, 23 Oct 2026: "Stack the preview buttons on canvas bottom right. at all times") */      /* the switches' gap between them (05:43: "why these two touch?"); the showcase's iris left of the eye, one unit apart (Okay, 18 Oct 2026, notes 2: "Showcase button back to the left of the preview button"; over it from 4.42.4 to 4.52.1, #280) */
   .eyebox { width: var(--control-large); padding: 0; overflow: hidden; border-radius: var(--round-switch); }      /* its sign fills the inside; the lashes run out and the box cuts them */
   .eyebox svg { display: block; flex: none; }
   .eyebox[aria-pressed="true"] > * { opacity: 1; }
@@ -97,22 +127,26 @@
   .eyebox[aria-pressed="true"] svg { position: relative; color: var(--off-canvas); clip-path: inset(var(--hair) round calc(var(--round-switch) - 2 * var(--hair))); }
   main { --off-canvas: var(--white); }
   main.dark { --off-canvas: var(--ink); }
-  .backdropbox { gap: var(--unit); padding: 0 var(--u4) 0 var(--u3); border-radius: var(--round-switch); }
+  .backdropbox { --sign-w: var(--dot); gap: 0; padding: 0 calc((var(--control-large) - 2 * var(--hair) - var(--sign-w)) / 2); border-radius: var(--round-switch); }
   .backdropbox[aria-expanded="true"] { box-shadow: inset 0 0 0 var(--hair) var(--on-canvas); }
   .backdropbox .dot { border-color: var(--on-canvas); }
+  /* a swatch on the canvas (Backdrop's, the strap's): its colour inside its outline only. Painted under the outline as
+     well (the default), WebKit lets the colour bleed over the round corners' edge, and on a part of a pixel (the dot
+     stands at x .25, y .5 here) the hairline can vanish into it (Okay, 19 Oct 2026, 23:53: "backdrop sometimes loses the
+     swatches outline … old Safari on an Intel Mac … iPad too") */
+  .backdropbox .dot { background-clip: padding-box; }
   /* Shadows (a trial, 14 Oct 2026): the Guides switch's make, at the bottom left, the Backdrop switch standing on it a
      unit above (Okay, 23:05: "button goes down"); one higher, so its open list lies over Backdrop.
      Its sign is a sphere and its cast shadow (15 Oct 2026), so its room is Guides'.
-     Its list opens upward (.shadelist, after the guides' list), so its arrow points up while closed. */
+     Its list opens upward (.shadelist, after the guides' list); its arrow points down while closed and turns open, as
+     every chevron on the canvas does (#518; Okay, 24 Oct 2026: "Chevrons all point down"). */
   .shadows { position: absolute; z-index: 4; left: var(--stop-short); bottom: var(--canvas-inset); display: flex; }
-  .shadows .guidesmore svg { rotate: 180deg; }
-  .shadows .guidesmore[aria-expanded="true"] svg { rotate: 0deg; }
 
   /* the list: near black and round, like the colour pop-out (.night). A kind of guide is one line: its name, then
      round choices with room between them — none, then the eight colours. The chosen one stands in a thick ring of its own colour, a
      little of the ground between them. A hairline under every line. */
   .guidelist { position: absolute; top: calc(100% + var(--unit)); right: 0; width: calc(2 * var(--pop-pad) + 2 * var(--hair) + var(--guide-name) + var(--guide-none) + 8 * var(--guide-dot) + 9 * var(--guide-gap) + 2 * var(--ring-thick)); max-width: calc(100vw - 2 * var(--canvas-inset));
-    max-height: calc(100vh - var(--bar-height) - 2 * var(--canvas-inset) - var(--control-large) - var(--unit)); overflow-y: auto; padding: var(--unit) 0 0; }      /* less on top: a line's own height already stands its dots off the edge. Its room at the sides is its parts' (next rule), so its bottom section can reach both edges */
+    max-height: calc(100dvh - var(--bar-height) - 2 * var(--canvas-inset) - var(--control-large) - var(--unit)); overflow-y: auto; padding: var(--unit) 0 0; }      /* less on top: a line's own height already stands its dots off the edge. Its room at the sides is its parts' (next rule), so its bottom section can reach both edges */
   .guidelist > * { margin-inline: var(--pop-pad); }
   .guidekind { display: grid; grid-template-columns: var(--guide-name) 1fr; align-items: center; min-height: var(--guide-row); box-shadow: inset 0 calc(-1 * var(--hair)) 0 var(--row-rule); }
   .guidekind.off .name { color: var(--grey); }
@@ -120,15 +154,6 @@
   /* the rings' guides and the guides you add: a small heading line with a choice at its right, then a line each */
   .guidehead { display: grid; grid-template-columns: var(--guide-name) 1fr; align-items: center; min-height: var(--guide-row); box-shadow: inset 0 calc(-1 * var(--hair)) 0 var(--row-rule); }
   .guidehead .name { font-weight: 600; }
-  /* All · Selected · None over the colours, from the none sign's left edge to the last colour's right, small (#305:
-     "all selected… line fits better"; "small like beta version allowed") */
-  .guidehead .segs { justify-self: stretch; height: var(--control-s); margin: 0 calc(var(--ring-gap-in) + var(--ring-thick)) 0 var(--guide-gap); }
-  .guidehead .segs > button { flex: 1 1 auto; height: 100%; padding: 0 var(--u1); font-size: var(--t-s); }
-  .guidekind.ring.selected .name { font-weight: 600; }
-  /* Add and the guides added under it belong to the bottom section: the section's lighter ground starts over Add, a
-     little more room over it (Okay, 18 Oct 2026, notes 2: "the functions are below, grouped under a lighter bg color
-     area. The grey area grows to include add line, the bottom block needs just a little more padding from top"; until
-     4.51.1 a band of the fields' colour over Add, the ground under Thickness · Reset All only, #271, #305) */
   /* the Guides list in two (4.79; Okay, 19 Oct 2026: "they need a scrollbar … use the lower part for all adjustments
      and settings"): its guides scroll, with a scrollbar a finger can drag; its settings stay under them on the lighter
      ground, every one of them — which rings and windows show theirs, Add, Thickness · Reset All. dvh: a phone's or an
@@ -137,12 +162,63 @@
     --list-gap: var(--canvas-inset); max-height: min(var(--list-room, 100dvh), calc(100dvh - var(--bar-height) - 2 * var(--canvas-inset) - var(--control-large) - var(--unit))); }      /* --list-room: measured when it opens, from the preview's top to its switch, less a gap each side */
   .guidesheet > * { margin-inline: 0; }
   .guidescroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-top: var(--unit); touch-action: pan-y; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--grey) transparent; }
+  /* the Guides list in one column (#539; Okay, 25 Oct 2026: "One column layout now and always", "less wider",
+     "inset tiered layer system"): four groups — Dial · Rings · Windows · Added — each a bold heading over its lines,
+     the lines inset a unit under it. A line: its name, then two circles at the right, its colour dot in one and its
+     chevron in the other, every line ending on one right edge, a hairline under every line. */
+  .guidelist.guidesheet { width: var(--guide-list); }
+  .guidescroll { position: relative; }
+  .guidesheet .guidehead { grid-template-columns: minmax(0, 1fr) auto; }
+  .guidesheet .guidehead.gap { margin-top: var(--u4); }      /* a group after a group: air over its heading (Okay, 24 Oct 2026, 23:21: "close repeating lines need more space") */
+  .guidesheet .guidekind { grid-template-columns: minmax(0, 1fr) var(--guide-circle) var(--guide-circle); column-gap: var(--u2); margin-left: var(--guide-inset); }      /* the tier: a group's lines inset under their heading (their group's box carries the list's side room) */
+  .guidesheet .guidekind.selected > .name { justify-self: start; max-width: 100%; box-sizing: border-box; height: var(--guide-circle); line-height: var(--guide-circle); padding: 0 var(--u3); border-radius: var(--round-pill); background: var(--ink); color: var(--paper); font-weight: 400; }      /* the selected ring or window: its name in a filled pill, the chosen word's look (Okay, 25 Oct 2026: "Selected one gets its own personally tailored one word pill") */
+  .guideadded .guidekind:last-child { box-shadow: none; }      /* the last line meets the foot's edge: no rule of its own there */
+  .gdot, .gchev { width: var(--guide-circle); height: var(--guide-circle); border-radius: 50%; display: grid; place-items: center; justify-self: center; }      /* each in a circle of its own, concentric (Okay: "If something can be a circle, is") */
+  .gdot::before { content: ""; width: var(--guide-none); height: var(--guide-none); border-radius: 50%; background: var(--c); box-shadow: 0 0 0 var(--hair) var(--chip-rule); }
+  .guidekind.off .gdot::before { background: none; box-shadow: inset 0 0 0 var(--hair) var(--grey); }      /* hidden (None): an empty ring */
+  .gchev { color: var(--grey); }
+  .gchev[aria-expanded="true"] { color: var(--ink); }
+  @media (hover: hover) { .gchev:hover { color: var(--ink); } }
+  .gchev[aria-expanded="true"] svg { rotate: 180deg; }
+  .guidehead .minus { display: grid; place-items: center; width: var(--guide-circle); height: var(--guide-circle); border: var(--hair) solid var(--grey); border-radius: 50%; color: var(--grey); }
+  @media (hover: hover) { .guidehead .minus:hover { border-color: var(--ink); color: var(--ink); } }
+  /* a heading's menu, Selected · All · None: the tool's chevron box, round here, as high as a circle */
+  .gmenu { height: var(--guide-circle); border-radius: var(--round-pill); }
+  .gmenu > .v { padding-left: var(--u3); }
+  .gmenu > .arrow { width: var(--guide-circle); border-left: 0; }
+  /* a chevron pressed: None and seven colours in a small box under the line, two lines of four */
+  .guidepop.dots { position: absolute; z-index: 3; display: grid; justify-content: start; grid-template-columns: repeat(4, var(--guide-circle)); gap: var(--u2); padding: var(--u3); border: var(--hair) solid var(--grey); border-radius: var(--round); background: var(--paper); }
+  .guidepop.dots :is(.tone, .none) { display: grid; place-items: center; width: var(--guide-circle); height: var(--guide-circle); border-radius: 50%; background: none; box-shadow: none; opacity: 1; }
+  .guidepop.dots .tone::before { content: ""; width: var(--guide-none); height: var(--guide-none); border-radius: 50%; background: var(--c); box-shadow: 0 0 0 var(--hair) var(--chip-rule); }
+  .guidepop.dots .tone:not(.on)::before { opacity: var(--guide-dim); }
+  .guidepop.dots :is(.tone, .none).on { box-shadow: inset 0 0 0 var(--hair) var(--ink); background: none; color: var(--ink); }      /* the chosen one: its circle drawn, concentric round its dot */
+  .guidepop.dots .none svg { flex: none; }
+  /* the foot, one ground (Okay, 25 Oct 2026, his marks on the drawing): Add and its three free pills; Thickness as a
+     pill switch and Reset All a quiet word; the pills' edges on the lines' right edge */
+  .guidesheet .guidesettings { padding: var(--u2) var(--pop-pad) var(--u3); background: var(--field); }
+  .guidesheet .guidesettings > .guidehead { grid-template-columns: auto minmax(0, 1fr); column-gap: var(--u2); margin-inline: 0; min-height: var(--guide-row); }
+  .guidesheet .guidesettings .guidehead .name { color: var(--grey); font-weight: 400; }
+  .guidesheet .guidesettings .pillswitch { justify-self: end; height: var(--guide-circle); box-sizing: border-box; background: var(--paper); }
+  .guidesheet .guidesettings .pillswitch > button { height: 100%; padding: 0 var(--guide-pill-pad); border-radius: var(--round-pill); font-size: var(--t-s); }
+  .guidesheet .guidesettings .pillswitch.free { flex-wrap: nowrap; gap: var(--u2); padding: 0; background: none; }
+  .guidesheet .guidesettings .pillswitch.free > button { border: var(--hair) solid var(--rule); background: var(--paper); }
+  .guidesheet .guidesettings .pillswitch:not(.free) > button { height: calc(100% - 2 * var(--u1)); margin: var(--u1) 0; }
+  .guidesheet .guidesettings .pillswitch:not(.free) { padding: 0 var(--u1); }
+  .guidelist.guidesheet .guidelast { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; column-gap: var(--u2); align-items: center; height: var(--guide-row); margin-inline: 0; padding: 0; background: none; }
+  .guidelist.guidesheet .guidelast > label:first-child { color: var(--grey); }
+  .guidelist.guidesheet .guidelast > .numcell { display: contents; }
+  .guidelist.guidesheet .guidelast > .resetall { grid-column: 3; align-self: stretch; display: grid; align-items: center; }      /* Reset All in the third column, as tall as the line */
+  .guidelist.guidesheet .guidelast > .ask { grid-column: 1 / -1; }
+  .gword { padding: 0 0 0 var(--u2); font-size: var(--t-s); color: var(--grey); }
+  @media (hover: hover) { .gword:hover { color: var(--ink); } }
   .guidescroll::-webkit-scrollbar { width: var(--scroll-w); }
   .guidescroll::-webkit-scrollbar-thumb { background: var(--grey); border-radius: calc(var(--scroll-w) / 2); }
   .guidescroll > * { margin-inline: var(--pop-pad); }
+  .guidescroll > .guidepop { margin-inline: 0; }
   .guidescroll.more { mask-image: linear-gradient(to bottom, var(--black) calc(100% - var(--u6)), transparent); }      /* more under the fold: the last line fades out */
   .guidesettings { flex: none; padding-top: var(--u2); background: var(--row-rule); }
   .guidesettings > .guidehead { margin-inline: var(--pop-pad); box-shadow: none; }
+  .guidesheet .guidesettings { margin-top: var(--u4); }
   /* a guide you added is one line, as every other (#305: "fit all in one line"): its name and its measures, quiet
      numbers to type in (grey, no box, as wide as they are); its colours; in the none sign's place a cross that removes
      it (an added guide is taken away, not hidden). A long name gives way to its numbers. */
@@ -151,18 +227,8 @@
   .guidefield { flex: none; display: inline-flex; align-items: center; color: var(--grey); }
   .guidefield input { height: var(--control); padding: 0; border: 0; background: none; color: inherit; text-align: right; }
   .guidefield input:focus { color: var(--ink); outline-offset: var(--u1); }      /* typing: its ring stands off the figures */
-  .dots .remove { color: var(--grey); }
-  .dots .remove:hover { color: var(--ink); }
-  .dots { display: flex; justify-content: space-between; align-items: center; padding: 0 calc(var(--ring-gap-in) + var(--ring-thick)) 0 var(--guide-gap); }
-  .dots button { flex: none; display: grid; place-items: center; width: var(--guide-dot); height: var(--guide-dot); border-radius: 50%; }
-  .dots .tone { background: var(--c); box-shadow: 0 0 0 var(--hair) var(--chip-rule); }
-  .dots .tone:not(.on) { opacity: var(--guide-dim); }
-  .dots .tone.on { box-shadow: 0 0 0 var(--ring-gap-in) var(--paper), 0 0 0 calc(var(--ring-gap-in) + var(--ring-thick)) var(--c), 0 0 0 calc(var(--ring-gap-in) + var(--ring-thick) + var(--hair)) var(--chip-rule); }
   .dots .none { color: var(--grey); }
-  .dots .none { width: var(--guide-none); height: var(--guide-none); }      /* the none sign: larger than a colour (4.79, "the oslashes for no went too small"), drawn at 14 */
-  .dots .none svg { flex: none; }
-  .dots .none:hover { color: var(--ink); }
-  .dots .none.on { background: var(--ink); color: var(--paper); box-shadow: 0 0 0 var(--ring-thick) var(--ink); }
+  @media (hover: hover) { .dots .none:hover { color: var(--ink); } }
   /* Thickness, on the list's own columns: name · slider · value · stepper */
   .guidelist .row { grid-template-columns: var(--guide-name) minmax(0, 1fr) var(--col) var(--col); min-height: var(--guide-row); box-shadow: inset 0 calc(-1 * var(--hair)) 0 var(--row-rule); }
   .guidelist .row > :is(label, input[type="range"]) { grid-column: auto; }
@@ -174,34 +240,102 @@
   .guidelast > * { grid-row: 1; }
   .guidelist .guidelast > label:first-child { grid-column: 1; }
   .guidelast > input[type="range"] { display: none; }
-  .guidelast > .numcell { grid-column: 2; display: flex; justify-content: flex-end; height: var(--control); pointer-events: none; }
-  .guidelast .numbox { pointer-events: auto; }
-  .guidelast > .resetall { grid-column: 3; align-self: stretch; display: flex; align-items: center; padding-left: var(--gap); border-left: var(--hair) solid var(--paper); }      /* its rule: the ground's, from the section's top to the box's bottom (#305) */
   /* Reset All asks first, in its line's place (#271): the question at the left, round ✕ and ✓ at the right */
   .guidelast.asking > :not(.ask) { visibility: hidden; }
   .guidelast > .ask { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; color: var(--ink); }
-  .guidelast > .ask[hidden] { display: none; }
   .guidelast .answers { display: flex; gap: var(--u2); }
   .roundb { display: grid; place-items: center; width: var(--control); height: var(--control); padding: 0; border: var(--hair) solid var(--ink); border-radius: 50%; background: none; color: var(--ink); }
-  .roundb:hover { background: var(--ink); color: var(--paper); }
+  @media (hover: hover) { .roundb:hover { background: var(--ink); color: var(--paper); } }
   .guidefoot { display: flex; justify-content: flex-end; align-items: center; }
-  /* a popup's bottom section (#305; Okay, 16 Oct 2026: "whole bottom section hr line color, top line gone,
-     perpendicular same thickness touches box bottom, lowest line gone. This is a bottom section rule. For these
-     popups"): the Guides' Thickness · Reset All, the Shadows' Reset. Filled with the line colour from edge to edge and
-     down to the box's bottom (the list is cut to its round corners); no line over or under it; a rule in it is a
-     hairline of the ground, from its top to the box's bottom (.resetall) */
-  .guidelist > .popfoot, .guidesettings > .popfoot { min-height: var(--pop-foot); margin-inline: 0; padding: 0 var(--pop-pad) env(safe-area-inset-bottom); background: var(--row-rule); box-shadow: none; }
-  .shadelist .guidehead .name { grid-column: 1 / -1; }      /* its headings are words alone: the whole line, not the names' column */
   /* the Shadows list: the guides' list, opening upward from its switch at the bottom left (after .guidelist, which it overrides) */
-  .shadelist { top: auto; right: auto; bottom: calc(100% + var(--unit)); left: 0;
-    max-height: calc(100vh - var(--bar-height) - var(--canvas-inset) - var(--canvas-top) - 2 * var(--control-large) - 2 * var(--unit)); }      /* from over its switch up to under undo · redo */
-  .shadelist .row.chk > label.check { grid-column: 1 / -1; }      /* Soft edge and its warning on one line, the whole width */
-  .shadelist .row { grid-template-columns: var(--shade-name) minmax(0, 1fr) var(--col) var(--col); }      /* its own names' column (4.45.3) */
+  .shadelist { position: fixed; z-index: 6; top: auto; right: auto; bottom: var(--shade-bottom, calc(var(--bar-height) + var(--canvas-inset))); left: var(--shade-left, var(--margin)); width: var(--shade-w); max-width: calc(100vw - 2 * var(--margin));
+    max-height: calc(100dvh - var(--shade-bottom, var(--bar-height)) - var(--canvas-inset)); border-radius: var(--shade-round); }      /* from the panel's margin, as wide as the drawing whatever the panel's width — over the dial on an iPad (Okay, 25 Oct 2026, 16:55: "Keep window width same, ok to go over onto the dial if need be"), standing on the switch, its corners all round (Okay, 25 Oct 2026, 02:29: "ROUND CORNERS"); over the panel's column, so the dial and its shadows stay in view */
+  /* the Shadows pane, to Okay's drawing of 25 Oct 2026 (#526, "pixel perfect"; dial-tool-shadows-pane-4.93_O.pdf): one
+     box on top holds the sun's picture and, in a column at its right as wide as the diagram, Angle · Height · Strength
+     as named sliders (R15, form D) on fat tracks with the value in the knob; under it a hairline, the heading line
+     (Part Heights · Parts), and the parts' rows at the left with the diagram at the right — one line per part: each
+     part of the diagram stands on its row's line. The foot: the popup's footer, §popfoot below. The room inside the
+     pane is --shade-pad all round; the rows' column and the diagram's are the panel's measures (--stack-w). */
+  .shadelist { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+  .shadescroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--shade-pad) var(--shade-pad) 0; touch-action: pan-y; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--grey) transparent; }
+  .shadelist > *, .shadescroll > * { margin-inline: 0; }      /* the scroll carries the room at the sides */
+  /* the top box: the picture at the left, the three sliders' column at the right, a hairline of the night between */
+  .suntop { display: grid; grid-template-columns: minmax(0, 1fr) var(--stack-w); height: var(--sun-h); border-radius: var(--round); background: var(--field); overflow: hidden; }
+  .sunpic { position: relative; min-width: 0; touch-action: none; cursor: grab; user-select: none; }
+  .sunpic.held { cursor: grabbing; }
+  .sunpic > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .sunpic .dial, .sunpic .hole { fill: none; stroke: var(--night-rule); stroke-width: var(--hair); }
+  .sunpic .fall { fill: none; stroke: var(--night-rule); stroke-width: var(--sun-dot); stroke-linecap: round; stroke-dasharray: 0 var(--sun-dot-gap); }      /* where the shadows fall: the far side of the dial, as a ring of dots */
+  .sunpic .sun > circle { fill: var(--ink); }
+  .sunpic .rays line { stroke: var(--ink); stroke-width: var(--sun-ray); stroke-linecap: round; }
+  .sunbox .sunpic :is(.dial, .hole, .fall) { stroke: var(--grey); }      /* in show mode's Light tab (4c-rows.css): the picture faded in the column's grey, the sun and its rays in ink ("Faded colors") */
+  .sunbox .sunpic .word { display: none; }      /* the pane's heading says Sun */
+  .sunpic .word { position: absolute; left: var(--shade-word-x); top: var(--shade-word-y); font-size: var(--t-s); font-weight: 600; color: var(--ink); pointer-events: none; }
+  .shadelist .three { display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); margin: var(--u2) 0; border-left: var(--hair) solid var(--night); }      /* the column: a hairline of the night at its left, the box's unit over and under it; the three thirds divided by the same line */
+  .shadelist .row.named { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; align-content: start; row-gap: var(--shade-named-gap); min-height: 0; padding: var(--shade-named-top) var(--shade-named-right) 0 var(--shade-named-left); box-shadow: inset 0 calc(-1 * var(--hair)) 0 var(--night); }
+  .shadelist .three > .row.named:last-child { box-shadow: none; }
+  .shadelist .row.named > label { font-size: var(--t-s); color: var(--ink); }
+  .shadelist .row.named > .lane { position: relative; display: grid; --track: var(--shade-track); --thumb: var(--shade-knob); margin-inline: var(--shade-slide-in); }      /* the slider: a fat track with a thin fill inside it, the knob a pill with the value */
+  .shadelist .row.named > .lane > input[type="range"] { grid-column: 1; height: var(--shade-knob); }
+  .shadelist .row.named > .lane > input[type="range"]::-webkit-slider-runnable-track { background: radial-gradient(circle, var(--ink) 49%, transparent 51%) var(--shade-fill-in) center / var(--shade-fill) var(--shade-fill) no-repeat, linear-gradient(to right, transparent calc(var(--shade-fill-in) + var(--shade-fill) / 2), var(--ink) calc(var(--shade-fill-in) + var(--shade-fill) / 2), var(--ink) var(--fill), transparent var(--fill)) center / 100% var(--shade-fill) no-repeat, var(--well); }      /* the thin fill (--shade-fill thick) starts a little inside the fat track's end with a round cap (a dot, then the line from its middle) and runs under the knob (his drawing; Okay, 25 Oct 2026, 17:16: "round cap on start") */
+  .shadelist .row.named > .lane > input[type="range"]::-webkit-slider-thumb { background: var(--ink); }
+  .shadelist .row.named > .lane > input[type="range"]::-moz-range-track { background: var(--well); }
+  .shadelist .row.named > .lane > input[type="range"]::-moz-range-progress { height: var(--shade-fill); background: var(--ink); }
+  .shadelist .knobval { position: absolute; top: 50%; left: calc(var(--thumb) / 2 + var(--at, 0) * (100% - var(--thumb))); translate: -50% -50%; min-width: var(--thumb); height: var(--thumb); box-sizing: border-box; padding: 0 var(--u2); border-radius: var(--round-pill); background: var(--ink); color: var(--night); font-size: var(--t-xs); font-weight: 700; font-variant-numeric: tabular-nums; line-height: var(--thumb); text-align: center; pointer-events: none; }
+  /* the parts: a hairline under the box, the heading line, then one line per part across both columns */
+  .shadeparts { display: grid; grid-template-columns: minmax(0, 1fr) var(--stack-w); column-gap: var(--gap); align-items: stretch; margin-top: var(--shade-gap); margin-bottom: var(--shade-foot-gap); }
+  .shadecol { display: grid; align-content: start; grid-template-rows: var(--line) auto; border-top: var(--hair) solid var(--night-rule); }
+  .shadehead { display: flex; align-items: center; font-size: var(--t-s); font-weight: 600; color: var(--night-rule); box-shadow: inset 0 calc(-1 * var(--hair)) 0 var(--night-rule); }
+  .shaderows { --side-columns: var(--stack-name) var(--shade-slide) var(--gap) var(--side-num); display: grid; align-content: start; grid-auto-rows: var(--line); padding-bottom: var(--shade-under); }      /* the column ends --shade-under past the last line, and the diagram's box with it */
+  .shadowdiscs { display: contents; }      /* the sliders squeezed to one length; the names' column as wide as "Date discs" */
+  .shaderows .row.side { grid-template-columns: var(--side-columns); column-gap: 0; min-height: var(--line); box-shadow: inset 0 calc(-1 * var(--hair)) 0 var(--night-rule); }
+  .shaderows .row.side > label { color: var(--night-grey); }
+  .shaderows .row.side > label.limit { color: var(--shade-lit); font-weight: 600; }      /* LIMIT, for a moment, where the name was (Okay, 25 Oct 2026) */
+  .shaderows .row.side:is(:focus-within, :has([aria-expanded="true"])) > label { color: var(--ink); }
+  .shaderows .row.side:is(:focus-within, :has([aria-expanded="true"])) input[type="range"] { --ink: var(--shade-lit); }
+  @media (hover: hover) {
+    .shaderows .row.side:hover > label { color: var(--ink); }
+    .shaderows .row.side:hover input[type="range"] { --ink: var(--shade-lit); }      /* under the pointer the slider's fill and knob turn the lit colour, as its part in the diagram (Okay's drawing, 25 Oct 2026) */
+  }
+  .shaderows .row.ref > label { grid-column: 1 / -1; }      /* the plate: the reference, nothing to size (Okay: "plate untouchable") */
+  .stackpic { position: relative; border: var(--hair) solid var(--night-rule); border-radius: var(--round); }      /* outline only, no ground (Okay, 01:46); it stands from the hairline over the heading to --shade-pad under the last row */
+  .stackpic .word { position: absolute; left: var(--shade-word-x); top: 0; height: var(--line); line-height: var(--line); font-size: var(--t-s); font-weight: 600; color: var(--night-rule); pointer-events: none; }
+  .stackpic > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .stackpic .axis { stroke: var(--night-rule); stroke-width: var(--hair); stroke-dasharray: 3 3; }      /* the centre line every part hangs on, from the rows' first line down (Okay, 01:58: "A dashed line marks the center line") */
+  .stackpic .parts > g { fill: none; stroke: var(--night-rule); stroke-width: var(--hair); stroke-linecap: round; }
+  .stackpic .parts > g .fill { fill: var(--night-rule); stroke: none; }
+  .stackpic .parts > g .dark { fill: var(--night); }
+  .stackpic .parts > g.lit { stroke: var(--ink); }
+  .stackpic .parts > g.lit .fill { fill: var(--ink); }
+  .stackpic .drop line { stroke: var(--shade-lit); stroke-width: var(--hair); }      /* the lit part's height: a line down the axis to the plate, and the plate's hole in the same colour */
+  .stackpic .drop .knock { stroke: var(--night); }      /* under the red: the axis knocked out, so the dashes stand on the night alone */
+  .stackpic .drop .moving { stroke-dasharray: var(--shade-dash); }      /* the piece this row changes: from the part to the next one toward the plate */
+  .stackpic .drop:not(.on) { display: none; }
+  .stackpic .parts > g.plate.dropped .hole { stroke: var(--shade-lit); }
+  /* §popfoot — a night popup's footer (Okay's drawing, 25 Oct 2026: "logically pixel perfect … objects snap to edges,
+     in-between padding equal, black lines connect to top"): a band of the field colour across the whole popup, its
+     bottom corners the popup's; cells divided by hairlines of the night that run the band's full height; each cell
+     holds its content with --foot-in at both sides, the first and last with the popup's own room at the outer edge;
+     the last cell takes what is left (three cells of content and a fourth: grid-template-columns). For every night popup with a foot (the Shadows pane; the guides' list next). */
+  .popfoot { display: grid; grid-auto-flow: column; grid-auto-columns: max-content; grid-template-columns: repeat(3, max-content) minmax(0, 1fr); align-items: stretch; min-height: var(--foot-h); margin-inline: 0; background: var(--field); border-radius: 0 0 var(--shade-round) var(--shade-round); }
+  .popfoot > .cell { display: flex; align-items: center; gap: var(--u2); padding: 0 var(--foot-in); }
+  .popfoot > .cell + .cell { border-left: var(--hair) solid var(--night); }
+  .popfoot > .cell:first-child { padding-left: var(--shade-pad); }
+  .popfoot > .cell:last-child { padding-right: var(--shade-pad); }
+  .popfoot .row { display: contents; }
+  .popfoot .row > label { font-size: var(--t-m); color: var(--ink); }
+  .popfoot .row > label.check { gap: 0; }
+  .popfoot input[type="checkbox"] { margin-right: var(--foot-tick-gap); }
+  .popfoot .row.block > label { color: var(--ink); }
+  .popfoot .cell.lead label { font-weight: 600; }
+  .popfoot .cell.lead input[type="checkbox"] { border-width: var(--thick); }
+  .popfoot .numbox { --box-value: var(--foot-value); --box-steps: calc(2 * var(--box-side-step)); }      /* the value narrow, − + as a side row's */
+  .popfoot .gword { height: var(--control); padding: 0 calc(var(--foot-in) - var(--hair)); border: var(--hair) solid var(--night-rule); border-radius: var(--round-small); font-size: var(--t-s); color: var(--ink); }
   /* the outline of what the pointer is on: an orange line on a white one, so it shows on any colour */
   .glow { fill: none; stroke: var(--glow); stroke-width: var(--glow-line); vector-effect: non-scaling-stroke; stroke-linejoin: round; }
   .glow.under { stroke: var(--white); stroke-width: var(--glow-under); }
-  .picked { fill: none; stroke: var(--picked); stroke-width: var(--glow-line); stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }      /* the numeral or mark Nudge works on (4.78): dashed in its ring's guide colour, on a white line */
-  .picked.under { stroke: var(--white); stroke-width: var(--glow-under); stroke-dasharray: none; }
+  .picked { fill: none; stroke: var(--picked); stroke-width: var(--hair); vector-effect: non-scaling-stroke; }      /* the numeral or mark Nudge works on (4.78): a box touching it, a hairline in its ring's guide colour (Okay, 04:52: "too aggressive … a rectangular tangent box") */
+  .picked.under { display: none; }
   /* its name: black inside, then a white line, then a black line — readable on any dial. --arrow: where the arrow sits. */
   /* a note on the preview (an old link, R31): the tip's look, centred under the header's line, as wide as it needs
      up to the preview less its switches; a press puts it away */
@@ -209,81 +343,83 @@
     background: var(--ink); color: var(--white); box-shadow: 0 0 0 var(--hair) var(--white), 0 0 0 var(--thick) var(--ink); font-weight: 600; text-align: center; }
   .tip { position: absolute; z-index: 2; pointer-events: none; padding: var(--u1) var(--u3); background: var(--ink); color: var(--white); white-space: nowrap;
     box-shadow: 0 0 0 var(--hair) var(--white), 0 0 0 var(--thick) var(--ink); font-weight: 600; }
-  .tip svg { position: absolute; left: calc(var(--arrow, 50%) - 10px); top: 100%; overflow: visible; }
+  .tip svg { position: absolute; left: calc(var(--arrow, 50%) - var(--tip-half)); top: 100%; overflow: visible; }
   .tip.below svg { top: auto; bottom: 100%; transform: scaleY(-1); }
   .tip svg path { fill: none; }
   .tip svg .a { stroke: var(--ink); stroke-width: var(--tip-arrow); }
   .tip svg .b { stroke: var(--white); stroke-width: var(--tip-arrow-in); }
   .tip svg .c { fill: var(--ink); }
-  /* ── the showcase (the iris switch; Okay, 15 Oct 2026, 04:26, reshaped 04:59 and 05:09) ── What stood on the preview
-     goes at once (fading, it twitched while the sky darkened) and comes back at once; only the dial travels (app.js).
-     The sky (a 45° gradient, set in app.js) and the spotlight fade in; the iris switch is an X at the window's bottom
-     right, Now a pill at the bottom centre on its line, both faint, in white. A drag moves the sun along its day */
-  :is(.sky, .pool) { opacity: 0; transition: opacity var(--show-time) linear; }
-  #app.show :is(.sky, .pool) { opacity: 1; }
-  #app.show main { --on-canvas: var(--white); --off-canvas: var(--ink); }
-  #app.show :is(.undos, .corner, .backdrops, .shadows, .tip, .tinyopen) { visibility: hidden; }
-  #app.show :is(#eye-box, .irisgo) { display: none; }
-  /* in the showcase the X and Now are larger and less faint, and stand as far in from the window's edges as the mark
-     does at the top left: the margin (05:43: "too close to edges, too faint… fit them inside the imaginary padding logo
-     top left got") */
-  #app.show main { --line-faint: color-mix(in srgb, var(--on-canvas) calc(var(--show-faint) * 100%), transparent); }
-  #app.show .eyes { position: fixed; right: var(--margin); bottom: var(--margin); }      /* the window's corner, from the first moment */
-  #app.show .irisbox { height: var(--show-key); }
-  #app.show .iriskey { width: calc(var(--show-key) - 2 * var(--hair)); }
-  #app.show .iriskey svg { width: calc(var(--show-key) - 2 * var(--hair)); height: calc(var(--show-key) - 2 * var(--hair)); }
-  #app.show :is(.irisbox > *, .nowpill:not(.back) > .word) { opacity: var(--show-faint); }
-  #app.show .nowpill { bottom: var(--margin); width: var(--show-pill); height: var(--show-key); border-radius: calc(var(--show-key) / 2); font-size: var(--t-l); }
-  #app.show .nowpill.back { width: var(--show-key); }
-  #app.show .nowpill.back svg { opacity: var(--show-faint); }
-  @media (hover: hover) { #app.show :is(.irisbox:hover > *, .nowpill:not(.back):hover > .word, .nowpill.back:hover svg) { opacity: 1; } }
-  #app.show :is(.preview, .preview path) { cursor: ew-resize; }      /* the sun goes left and right */
+  /* ── show mode (the iris switch; build list #509, 22 Oct 2026) ── the panel moves to the right (4a-panel.css); on the
+     canvas, what the show tabs hold is off (R16) */
+  .showing :is(.guides, .shadows, .xraybox, .casebox, .tinyopen) { display: none; }      /* show mode: Guides and Shadows are the dial side's (Okay, 23 Oct 2026: "Guides? Completely nonexistent here. Remove them", "The shadows … another realm"); the watch's light is on the Light tab */
+  .showing main { --covered: calc(var(--panel-w) * (1 - var(--away))); }      /* how much of the canvas the column lies over */
+  .showing :is(.corner, .eyes) { right: calc(var(--canvas-inset) + var(--covered)); }
+  .showing .backdrops { bottom: var(--canvas-inset); }
+  .watch.fading { transition: opacity var(--watch-fade) ease-out; }      /* the watch fading in or out (swoop() in app.js) */      /* Shadows' slot under it is empty here: Backdrop takes it (Okay, 23 Oct 2026: "move it one slot down") */
+  /* the iris switch in show mode, lit in the column's own colours: its fill, the panel's white for its sign (tint_panel() in app.js sets them) */
+  .showing .irisbox { border-color: var(--iris-fill); background: var(--iris-fill); color: var(--iris-ink); }
+  .showing .irisbox > * { opacity: 1; }
+  .showing .undos { left: var(--canvas-inset); }      /* undo · redo · Versions at the canvas's top left (Okay, 23 Oct 2026: "bring them back"); the dial side's stop short of the title, which here is on the right */      /* show mode: what the show tabs hold, and the guides, are off the canvas (R16); the case is a row on the Watch tab */
   /* the iris switch: the iris in a box; pressed, its words slide out to its left (ACTIVATE SHOWCASE), which alone go
-     to the showcase (04:59: "we need affordance"); in the showcase an X, the way out */
+     to show mode (04:59: "we need affordance"); in show mode an X, the way out */
   .irisbox { padding: 0; overflow: hidden; border-radius: var(--round-switch); }
   .iriskey { display: block; width: calc(var(--control-large) - 2 * var(--hair)); height: 100%; padding: 0; }
   .iriskey svg { display: block; margin: 0 auto; }
-  .irisbox .x { display: none; }
-  #app.show .irisbox .x { display: inline; }
+  :is(.irisbox, .eyebox) .x { display: none; }      /* the eye's old way-out X: the dial alone wears the eye now (24 Oct 2026) */
+  /* the rays turn one whole turn while ACTIVATE SHOWCASE unfolds, and back as it folds (Okay, 24 Oct 2026: "One rotation of 360 deg. Of the rays around iris for the activate showcase button first label reveal"; "Label out and back") */
+  .irisbox .rays { transform-box: view-box; transform-origin: 15.25px 15px; transition: rotate var(--rays-time) var(--view-ease); }
+  .irisbox[aria-expanded="true"] .rays { rotate: var(--rays-turn); }
+  .iriskey svg { overflow: visible; }      /* the rays reach out behind the words, faded (the drawing's mask); the box's round edge still cuts them */
+  .irisgo { position: relative; z-index: 1; }      /* the words over the rays */
+  @media (prefers-reduced-motion: reduce) { .irisbox .rays { transition: none; } }
   .irisgo { max-width: 0; height: 100%; padding: 0; overflow: hidden; white-space: nowrap; font-family: var(--mono); font-size: var(--t-s); text-transform: uppercase; letter-spacing: var(--track-100);
     transition: max-width var(--iris-time) var(--view-ease), padding var(--iris-time) var(--view-ease); }
   .irisbox[aria-expanded="true"] .irisgo { max-width: var(--iris-words); padding: 0 var(--u2) 0 var(--u4); }
   @media (hover: hover) { .irisgo:hover { text-decoration: underline; text-underline-offset: 0.2em; } }
-  /* Now: a pill, tracked 100; pressed, the hands spin to now and it shrinks into a round undo sign (.back), the way back */
-  .nowpill { position: absolute; z-index: 3; left: 50%; bottom: var(--canvas-inset); translate: -50% 0; display: grid; place-items: center; width: var(--now-pill); height: var(--control-large); padding: 0; border-radius: calc(var(--control-large) / 2);
-    font-family: var(--mono); text-transform: uppercase; letter-spacing: var(--track-100); visibility: hidden; transition: width var(--iris-time) var(--view-ease); }
-  .nowpill > * { grid-area: 1 / 1; transition: opacity var(--iris-time) linear; }
-  .nowpill svg { opacity: 0; }
-  .nowpill.back { width: var(--control-large); }
-  .nowpill.back .word { opacity: 0; }
-  .nowpill.back svg { opacity: var(--faint); }
-  @media (hover: hover) { .nowpill.back:hover svg { opacity: 1; } }
-  #app.show .nowpill { visibility: visible; }
-  /* Now and 10:10 side by side, the gap between them on the dial's centre line; each is held by its inner edge, so the
-     one that shrinks into the undo sign shrinks toward the middle and the other doesn't move (Okay, 15 Oct 2026, 07:40:
-     "next to now, 10:10. Selected turns undo, other stays still"). 10:10 is two letters (and their tracking) wider */
-  .nowpill.now { translate: calc(-100% - var(--u1)) 0; }
-  .nowpill.ten { translate: var(--u1) 0; }
-  #app.show .nowpill.ten { width: calc(var(--show-pill) + 2ch + 2 * var(--track-100)); }
-  #app.show .nowpill.ten.back { width: var(--show-key); }
-  /* the hands key: the showcase's bottom left corner, across from the X; round, the Hands sign inside, as faint as the
-     X. Pressed, the hands are hidden and the key is filled, the sign dark on it (07:40) */
-  .handskey { position: fixed; z-index: 3; left: var(--margin); bottom: var(--margin); width: var(--show-key); height: var(--show-key); padding: 0; border-radius: 50%; visibility: hidden; }
-  .handskey svg { display: block; opacity: var(--show-faint); }
-  #app.show .handskey { visibility: visible; }
-  .handskey[aria-pressed="true"] { border-color: transparent; background: color-mix(in srgb, var(--white) calc(var(--show-faint) * 100%), transparent); color: var(--night); }
-  .handskey[aria-pressed="true"] svg { opacity: 1; }
-  @media (hover: hover) { .handskey:hover svg { opacity: 1; } .handskey[aria-pressed="true"]:hover { background: var(--white); } }
-  /* over Now, once the dial has arrived: a two-headed arrow, white and glowing, comes, sways left and right, and goes;
-     centred between the dial and Now (app.js sets its top) (04:59; 05:43: "can't see it. Make it white and glow and
-     fade, 3x size") */
-  .sunhint { position: absolute; z-index: 3; left: 50%; translate: -50% 0; color: var(--white); opacity: 0; pointer-events: none; filter: drop-shadow(0 0 var(--u1) var(--white)) drop-shadow(0 0 var(--u3) color-mix(in srgb, var(--white) 60%, transparent)); }
-  .sunhint svg { display: block; }
-  .sunhint.go { animation: sway var(--hint-time) ease-in-out; }
-  @keyframes sway { 0% { opacity: 0; transform: translateX(0); } 18% { opacity: 1; } 38% { transform: translateX(calc(-1 * var(--u4))); } 62% { transform: translateX(var(--u4)); } 82% { opacity: 1; transform: translateX(0); } 100% { opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .sunhint.go { animation: none; } }
   /* a switch whose words show is filled with the backdrop's colour, so what is under it (the dial) doesn't show through
      its words (Okay, 15 Oct 2026, 07:07: "these buttons get solid bg color when labels visible"): the iris switch open
      (ACTIVATE SHOWCASE), the labelled switches — always on a wide screen, on a phone while unfolded (8-narrow.css) */
-  .irisbox[aria-expanded="true"], :is(.guidesbox, .guidesmore, .backdropbox, .casebox) { background: var(--canvas-fill); }
+  /* the switches' words (#518; Okay, 24 Oct 2026: "All canvas buttons, labels default hidden. Like on mobile, load with
+     animation. On desktop hover on icon reveals the name, whole is a button"; "Labels appear when canvas empty area
+     clicked"): a switch shows its sign alone, a square; its word (and Case's chevron) unfolds for a while after the page
+     opens and after a press on the empty canvas (main.words, words_unfold() in app.js), or under the pointer */
+  :is(.guidesbox, .backdropbox, .versionsbox) > .word, .casebox :is(.word, .arrow) { display: inline-grid; place-items: center; max-width: 0; overflow: hidden; white-space: nowrap;
+    transition: max-width var(--iris-time) var(--view-ease), margin var(--iris-time) var(--view-ease); }
+  :is(.guidesbox, .backdropbox, .versionsbox, .casebox) { transition: padding var(--iris-time) var(--view-ease); }
+  main.words :is(.guidesbox, .backdropbox, .versionsbox) > .word, main.words .casebox :is(.word, .arrow) { max-width: var(--word-max); margin-left: var(--unit); }
+  main.words :is(.guidesbox, .backdropbox, .versionsbox, .xraybox) { padding-right: var(--u4); }      /* as much room after the word as before the sign (4.86: "Xray's box needs padding after label") */
+  @media (hover: hover) {
+    :is(.guidesbox, .backdropbox, .versionsbox):hover > .word, .casebox:hover :is(.word, .arrow) { max-width: var(--word-max); margin-left: var(--unit); }
+    :is(.guidesbox, .backdropbox, .versionsbox, .xraybox):hover { padding-right: var(--u4); }
+  }
+  /* a switch whose word shows is filled with the backdrop's colour, so the dial under it doesn't show through its word
+     (Okay, 15 Oct 2026, 07:07: "these buttons get solid bg color when labels visible"); folded to its sign, an outline */
+  .irisbox[aria-expanded="true"], main.words :is(.guidesbox, .guidesmore, .backdropbox, .casebox, .versionsbox) { background: var(--canvas-fill); }
+  @media (hover: hover) { :is(.guidesbox, .backdropbox, .casebox, .versionsbox):hover { background: var(--canvas-fill); } }
+  /* show mode: no fill — its backdrop is a gradient, so a fill of one colour stands out as a patch (Okay, 24 Oct 2026: "Align
+     these, remove bg, same as main"; on the dial side the fill is the backdrop's own colour and so not seen) */
+  .showing :is(.guidesbox, .guidesmore, .backdropbox, .casebox, .versionsbox) { background: none; }
+
+  /* show mode's Backdrop (ground_pop() in preview.js; #510, Okay, 25 Oct 2026: "Make the all swatches same, large size,
+     gradents are 2x blocks of the same single swatch with a gradient in it. Better design of the popup"): the Shadows
+     pane's night box — its width, its room all round, its heading lines and its footer (§popfoot); under each heading one
+     grid of --ground-cols large squares, a gradient two of them side by side; the chosen one ringed in ink as the colour
+     pop-out's palette (.chips) */
+  .groundscroll { display: grid; gap: var(--u3); padding-bottom: var(--shade-pad); }
+  .groundscroll .guidehead { grid-template-columns: 1fr; }
+  .groundscroll .groundtiles + .guidehead { margin-top: var(--u3); }
+  .groundtiles { display: grid; grid-template-columns: repeat(var(--ground-cols), var(--ground-chip)); grid-auto-rows: var(--ground-chip); gap: var(--pop-chip-gap); }      /* every row one square high: a gradient's two squares and the gap between them, as tall as one */
+  .groundtile { min-width: 0; padding: 0; border: 0; border-radius: var(--round-small); background: none; }
+  .groundtile.wide { grid-column: span 2; }
+  .groundtile i { display: grid; place-items: center; width: 100%; height: 100%; border-radius: var(--round-small); box-shadow: inset 0 0 0 var(--hair) var(--chip-rule); font-style: normal; }
+  .groundtile.on { outline: var(--thick) solid var(--ink); outline-offset: var(--u1); }
+  .groundtile.auto i { font-size: var(--t-s); color: var(--white); text-shadow: 0 0 var(--u1) rgb(0 0 0 / 0.5); }
+  .groundtile.add { border: var(--hair) solid var(--rule); background: var(--field); color: var(--ink); font-size: var(--t-m); line-height: 1; }
+  .groundtile.add:disabled { opacity: 0.35; }
+  @media (hover: hover) { .groundtile.add:not(:disabled):hover { background: var(--hover); border-color: var(--ink); } }
+  .groundfoot .footname { font-size: var(--t-m); color: var(--grey); }
+  .groundfoot .cell.lead .footname { font-weight: 600; color: var(--ink); }
+  .gradpick { display: flex; gap: var(--u1); }
+  .gradpick .groundpick .dot { margin: 0; }      /* an end of the gradient: its dot alone in the pill */
+  :is(.groundpick.on, .gradpick.on .groundpick) { box-shadow: 0 0 0 var(--hair) var(--ink); }
 }

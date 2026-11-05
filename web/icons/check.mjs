@@ -1,6 +1,6 @@
 // icons/check.mjs — the icon check (R33). Opens the built page (dial-tool.html) in Chromium at 2×, visits the window's
 // states, finds every icon (an <svg> in the panel, the bars and the pop-outs: not the preview, the ruler, font samples,
-// hand details, the print sheet's page (4.75) or the Gallery), and checks it against the icon grid written in src/app.js (docs/design.md §9):
+// hand details, the print sheet's page (4.75) or the Gallery), and checks it against the icon grid written in src/icons.js (docs/design.md §9):
 //   1. one unit, one point: the viewBox is the icon's size on screen (hand tiles: twice, drawn by the geometry)
 //   2. every stroked line has one of the four widths, LINE · SLANT · CURVE · DENSE (or DENSE + 1/8: the round corners of
 //      a quiet box, drawn with box(…, DENSE, DENSE + 1 / 8)), or is a pictured width (PICTURED)
@@ -18,10 +18,10 @@ const OUT = "icons/out";
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT + "/icons", { recursive: true });
 
-// the four widths, read from app.js, so this check follows the source
-const src = fs.readFileSync("src/app.js", "utf8");
+// the four widths, read from icons.js, so this check follows the source
+const src = fs.readFileSync("src/icons.js", "utf8");
 const decl = /const (LINE = [^;]+);/.exec(src);
-if (!decl) { console.log("FAIL  app.js has no `const LINE = …` line: the icon grid is gone"); process.exit(1); }
+if (!decl) { console.log("FAIL  icons.js has no `const LINE = …` line: the icon grid is gone"); process.exit(1); }
 const W = {};
 for (const part of decl[1].split(/,\s*(?=[A-Z]+ =)/)) { const [k, v] = part.split("=").map((s) => s.trim()); W[k] = Function(...Object.keys(W), `return ${v}`)(...Object.values(W)); }
 const WIDTHS = [...["LINE", "SLANT", "CURVE", "DENSE"].map((k) => W[k]), W.DENSE + 1 / 8];      // the last: a quiet (DENSE) box's round corners, an eighth heavier, as a LINE box's CURVE corners are
@@ -29,10 +29,9 @@ const WIDTHS = [...["LINE", "SLANT", "CURVE", "DENSE"].map((k) => W[k]), W.DENSE
 const PICTURED = [
   { host: /^ring-kind-|^add-/, widths: [1, 2, 3], why: "a ring kind: ticks 1, marks 2, band 3, as on the dial" },
   { host: /^ring-twelve-Style-3$/, widths: [2], why: "a dashed outline: dashes look lighter than a whole line" },
-  { host: /^iris-box/, widths: [1], why: "the showcase's X, the eye's rays made readable while faint (Okay, 15 Oct 2026, 04:59: \"iris becomes an x\")" },
-  { host: /^hands-key/, widths: [1], why: "the showcase's hands key, lines 1 as the X across from it (Okay, 15 Oct 2026, 07:40)" },
-  { host: /^eye-box/, widths: [0.625], why: "the eye switch's rays, thin on purpose (Okay, 15 Oct 2026, 03:41: \"I want to see thin lines\"; 0.5 until 16 Oct: \"thicker lines, just barely visibly\")" },
-  { host: /^value-pop-(plus|minus)$/, widths: [6], why: "the controller's − and +, 6 thick (8 until 4.85, when the controller went to three quarters), square ends, white on their discs (controller 2.svg, 18 Oct 2026; round ends from his drawing of 17 Oct, 3 from 16 Oct)" },
+  { host: /^iris-box/, widths: [0.75], why: "show mode's switch: the rays round the iris, thin on purpose (Okay, 15 Oct 2026, 03:41: \"I want to see thin lines\"; 24 Oct 2026: \"Eye with rays is … for activate showcase\")" },
+  { host: /^eye-box/, widths: [1], why: "the dial alone's eye: its old way-out X, 1 thick, kept in the drawing and hidden (24 Oct 2026: the eye is the dial alone's)" },
+  { host: /^value-pop-(plus|minus)$/, widths: [3.57], why: "the controller's − and +, 3.57 thick (6 × 70 % × 85 %, 24 Oct 2026: \"plus minus and number line 70% of now\"; \"a bit more smaller %15\"), square ends, white on their discs (controller 2.svg, 18 Oct 2026; round ends from his drawing of 17 Oct, 3 from 16 Oct)" },
   { host: /^(Skip where|Knock out): /, widths: [3], why: "Give way's drawing: this ring's ticks, a dial's ticks pictured, thick (Okay, 18 Oct 2026: \"thicker indices\")" },
   { host: /^logo$/, widths: [1, 1.375], why: "Okay's own mark, at his weights: lines 1, ring 1.375 (15 Oct 2026, 03:06: \"a bit thinner\")" },
 ];
@@ -44,8 +43,8 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, dev
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 await page.addInitScript(() => { Date.now = () => 1791900000000; });
-await page.addInitScript(() => { if (!localStorage.getItem("dial-tool-last")) localStorage.setItem("dial-tool-last", "{}"); });      // the plain starting dial, not the opener (Okay's watch, 4.38.12)
-await page.addInitScript(() => { if (!localStorage.getItem("dial-tool-folds")) localStorage.setItem("dial-tool-folds", '{"*":false}'); });      // every pane open, as for a visitor who has opened them (#270)
+await page.addInitScript(() => { setTimeout(() => { if (!localStorage.getItem("dial-tool-last")) localStorage.setItem("dial-tool-last", "{}"); }, 0); });      // the plain starting dial, not the opener (Okay's watch, 4.38.12)
+await page.addInitScript(() => { setTimeout(() => { if (!localStorage.getItem("dial-tool-folds")) localStorage.setItem("dial-tool-folds", '{"*":false}'); }, 0); });      // every pane open, as for a visitor who has opened them (#270)
 await page.goto("file://" + process.cwd() + "/dial-tool.html");
 await page.waitForFunction(() => window.dial_tool && window.dial_tool.statik, null, { timeout: 20000 });
 await page.waitForTimeout(300);
@@ -126,6 +125,12 @@ await visit("hand shapes", () => page.click("#hand-shape-Shape-7"));      // eve
 await visit("Windows", async () => { await tab("Date"); await page.check("#window-on-Show"); await unfold(); });      // the Show box (#261, 4.46)
 for (const kind of ["day", "am · pm", "moon"]) await visit("window " + kind, () => page.locator(".form .pickt:visible", { hasText: kind }).first().click());
 await visit("window off", () => page.click("#window-card-2"));
+// three states drawn on the grid but not reached before (#158): a window's own font, which shows Same font as with its
+// sign; the labelmenu chevron (12), in the bar's date pop-up (its menus are the rows' menus); and hover,
+// with the pointer over the ring list's tools and a tab
+await visit("window's own font", async () => { await page.click("#window-card-1"); await page.check("#window-on-Show"); await page.evaluate(() => { const t = window.dial_tool, w = t.window(); w.family = "Barlow"; w.ps = "Barlow-SemiBold"; t.changed(true); }); await unfold(); await page.waitForSelector("#window-font-back:not([hidden])", { timeout: 3000 }); });
+await visit("labelmenu", async () => { await page.click("#date"); await page.waitForSelector("#date-pop .labelmenu svg", { timeout: 3000 }); });
+await visit("hover", async () => { await page.keyboard.press("Escape"); await tab("Rings"); await page.hover(".ringlist li.ring.on"); await page.hover('button[data-tab="Hands"]'); });
 await visit("Export", () => tab("Export"));
 // "panel away" is gone: the panel's square left the bar (#190, 14 Oct 2026)
 await browser.close();

@@ -10,6 +10,7 @@
      the place of the whole one. The row above draws it, on its own last line, where every
      line of a row falls; the nested row draws no line over itself. One hidden row may lie between the two (a note that doesn't apply now). */
   .row:is(.nest, .tied, .under), .row.note { box-shadow: inset 0 calc(-1 * var(--hair)) 0 var(--row-rule); }
+  .pane.headless > .body > .row:first-child { box-shadow: inset 0 calc(-1 * var(--hair)) 0 var(--row-rule); }      /* a pane with no heading: its first row draws no line over it, the pane's own top line is there (Okay, 24 Oct 2026: "Remove style's top dark hr bar") */
   .row:has(+ .row:is(.nest, .tied, .under):not([hidden])), .row:has(+ .row[hidden] + .row:is(.nest, .tied, .under):not([hidden])) { box-shadow: 0 calc(-1 * var(--hair)) 0 var(--row-rule); background: linear-gradient(var(--row-rule) 0 0) right bottom / calc(100% - var(--nest-from)) var(--hair) no-repeat; }
   .row:is(.nest, .tied, .under):has(+ .row:is(.nest, .tied, .under):not([hidden])) { box-shadow: none; }
   .row > .blank:first-child { display: block; }
@@ -32,7 +33,7 @@
   .row.sheetrow > .btn { grid-column: 3 / span 2; justify-self: start; }
   .row.sheetrow > .sheetpage { grid-column: 5 / -1; justify-self: end; width: var(--sheet-w); }
   .sheetpage svg { display: block; width: 100%; height: auto; }
-  .sheetpage .paper { fill: var(--white); stroke: var(--rule); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .sheetpage .paper { fill: var(--white); stroke: var(--rule); stroke-width: var(--hair); vector-effect: non-scaling-stroke; }
   .sheetpage .copy { fill: var(--ink); }
   .row.resetblank > .btn { grid-column: 3 / -1; justify-self: start; }
   .row.resetblank > .quiet { grid-column: 3 / -1; }
@@ -48,16 +49,21 @@
      words (a window's text, custom labels) is a field like any other (Okay, 13 Oct 2026: "remove input height") */
   .picker header .find > input, .picker .adding > input { height: var(--control-large); border-color: var(--grey); }
   .row > label:first-child { color: var(--grey); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row > .ownnames { grid-column: 3 / -1; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: var(--u1); padding: var(--u1) 0; }      /* your own words, side by side (#515, #516) */
+  .ownnames > .ownname { min-width: 0; padding: 0 var(--u1); text-align: center; }      /* as typed: what the window draws */
+  .row.off > label:first-child { color: var(--uiblack, var(--ink)); }
+  .row:has(> .toggle[aria-checked="true"]) > label:first-child { color: var(--white); }      /* on: its name white (19:40: "On text white switch to the right and pill filled 'black'") */      /* a toggle that is off: its name goes dark (#525; Okay, 24 Oct 2026: "Off text label also goes black") */
   .row > label.strong:first-child { color: var(--ink); font-weight: 600; }      /* a name where a label would stand: the selected ring's, before its kinds */
   /* a label with a small menu beside it: the words, then a boxed arrow with the browser's own menu lying over it */
   .menulabel { display: flex; align-items: center; gap: var(--unit); min-width: 0; }
   .menulabel > label { color: var(--grey); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .labelmenu { position: relative; flex: none; display: grid; place-items: center; width: var(--menu-box); height: var(--menu-box); border: var(--hair) solid var(--grey); background: var(--field); color: var(--ink); }
-  .labelmenu:hover { border-color: var(--ink); }
+  @media (hover: hover) { .labelmenu:hover { border-color: var(--ink); } }
   .labelmenu > select { position: absolute; inset: calc(-1 * var(--reach-y, 0px)); width: calc(100% + 2 * var(--reach-y, 0px)); height: calc(100% + 2 * var(--reach-y, 0px)); opacity: 0; cursor: pointer; }      /* under a finger the unseen menu is larger than its box (reach) */
-  .row > :is(select, .segs, .colour, .single, .tools, .picks, .swatches), .row.txt > input, .row > button:not(:first-child) { grid-column: 3 / -1; }
+  .row > :is(select, .menubox, .segs, .pillswitch, .colour, .single, .tools, .picks, .swatches), .row.txt > input, .row > button:not(:first-child) { grid-column: 3 / -1; }
   .row > :is(.check, .wide), .row.note > .quiet { grid-column: 1 / -1; }
-  .row > .setnote { grid-column: 1 / -1; margin: var(--unit) 0 0; }      /* what a settings file is, over its buttons (#279) */
+  .row > .setnote { grid-column: 1 / -1; margin: var(--unit) 0 var(--u1); }      /* what a settings file is, over its buttons (#279) */
+  .tools.even { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }      /* buttons in equal widths across the pane (#482: "4 buttons fit all the way, explainer fits all the way") */
   .row > .warn { grid-column: 3 / -1; margin: var(--u1) 0 var(--unit); font-size: var(--t-s); color: var(--ink); }      /* the warning under a button that replaces the whole dial (Reset): in ink, not quiet, on the controls' column (Okay, 16 Oct 2026, 10:46) */      /* a tick and its words start at the left edge */
   .row > span:first-child:empty { display: none; }
   .row.nest > .check { grid-column: 3 / -1; }       /* a question about the row above: it starts where the controls start */
@@ -65,6 +71,11 @@
      2026: "The drawing of secondary lines after an adjustment, they start on the column aligned with the upper row.
      App-wide"; 20:22, Print's Mono print mask moved to that column). Not beside a hand's box (.side: its own columns) */
   .body .row:not(.side) > .check, .body .row.note:not(.side) > .quiet { grid-column: 3 / -1; }
+  /* an exception, by pane (cls "ticks-wide"): Print's ticks and their notes start at the left, over every column, since
+     nothing on the left explains them but the pane's title (Okay, 20 Oct 2026, 02:37: "These are within rules … Now an
+     exception. These have nothing on the left column to explain but the print title. These tick boxes span all the
+     columns to save space") */
+  .pane.ticks-wide .body .row:not(.side) > .check, .pane.ticks-wide .body .row.note[data-after="tick"]:not(.side) > .quiet { grid-column: 1 / -1; }      /* a note under controls keeps their column */
   /* a note and the row it explains are one box (design canon §6, #420; Okay, 19 Oct 2026: "hiding the white line …
      always within the same box that ends with a bottom white border"): no line between them, the box's line under the
      note. Its words are small and grey, one or two lines; the first follows the row's own line at the panel's line
@@ -73,9 +84,10 @@
      the note starts where its words do; under anything else, on the controls' column (.under, or after the first row). */
   .row.note { min-height: 0; --note-air: calc((var(--line) - var(--leading) * var(--t-m)) / 2); }
   .row.note > .quiet { margin-top: calc(-1 * var(--note-air)); padding: 0 0 var(--note-air); font-size: var(--t-s); line-height: var(--leading); text-wrap: balance; }
-  .row:not(.chk, .note) + .row.note > .quiet { margin-top: calc((var(--control) - var(--line)) / 2); }      /* under a field or a slider: just below its box */
-  .row.chk + .row.note > .quiet { padding-left: calc(var(--tick) + var(--tick-gap)); }
-  .row:not(.note):has(+ .row.note:not([hidden])), .row:not(.note):has(+ .row[hidden] + .row.note:not([hidden])) { box-shadow: 0 calc(-1 * var(--hair)) 0 var(--row-rule); background: none; }
+  .row.note[data-after="field"] > .quiet { margin-top: calc((var(--control) - var(--line)) / 2); }      /* under a field or a slider: just below its box */
+  .row.note[data-after="tiles"] > .quiet { margin-top: 0; }      /* under a row of tiles: the tiles' own room under them, then the words */
+  .row.note[data-after="tick"] > .quiet { padding-left: calc(var(--tick) + var(--tick-gap)); }
+  :is(.row.noted, .row:not(.note):has(+ .row.note:not([hidden]))) { box-shadow: 0 calc(-1 * var(--hair)) 0 var(--row-rule); background: none; }      /* the row a note belongs to (sync_rows marks it noted): no line under it, however many hidden rows lie between; the :has() half only lends the weight the nested rows' lines need to be outdone (no !important, R32) */
   .row.note:has(+ .row.note:not([hidden])) { box-shadow: none; }
   .row > button:not(:first-child) { justify-self: start; }
   .row > .btn.main:first-child { justify-self: stretch; }      /* a button standing where the label would (PNG) */
@@ -88,8 +100,34 @@
      the pill stands on the line under the first row, starting where the names start, over the next row's line. Width and
      height were one line, two numbers to it, from 4.46.1 to 4.56 (#265) */
   .row.haslink { position: relative; }
-  .row.haslink > .linkpill { position: absolute; z-index: 1; grid-column: 1 / -1; grid-row: 1; justify-self: start; left: 0; bottom: 0; translate: 0 50%; display: grid; place-items: center; height: var(--link-pill); padding: 0 var(--u2); border: var(--hair) solid var(--row-rule); border-radius: var(--round-pill); background: var(--surface); color: var(--ink); font: 400 var(--t-pixel)/1 var(--pixel); letter-spacing: 0; }
-  .row.haslink > .linkpill:hover { border-color: var(--grey); }
+  .row.haslink > .linkpill { position: absolute; z-index: 1; grid-column: 1 / -1; grid-row: 1; justify-self: start; left: 0; bottom: 0; translate: 0 50%; display: grid; place-items: center; height: var(--link-pill); padding: 0 var(--u2); border: var(--hair) solid var(--row-rule); border-radius: var(--round-pill); background: var(--surface); color: var(--grey); font: 400 var(--t-pixel)/1 var(--pixel); letter-spacing: 0; }
+  @media (hover: hover) { .row.haslink > .linkpill:hover { border-color: var(--grey); } }
   .row.haslink > .linkpill.on { border-color: var(--ink); background: var(--ink); color: var(--white); }
   /* a window's colours on one line (#266, 4.46.1): a quiet word, then its pill; a third (Picture) only for am · pm and moon */
+
+  /* show mode: a number's slider on a line of its own under its name and box, as wide as the row — the column is narrow,
+     and in the row the slider was left too short (Okay, 23 Oct 2026: "Why are these short?"; the Show Case's rule,
+     21 Oct 2026, 23:46: the pair reads as one row, no line between) */
+  .showing .body .row.num:not(.side) { grid-template-rows: var(--line) var(--line); }
+  .showing .body .row.num:not(.side) > :not(input[type="range"]) { grid-row: 1; }
+  .showing .body .row.num:not(.side) > input[type="range"] { grid-column: 1 / -1; grid-row: 2; }
+
+  /* show mode: the notes the whole width (Okay, 23 Oct 2026: "explainers span the whole width"); ticks, colour chips and
+     pills stand in the first column after the names, as on the dial side ("Color swatches and pills go back") */
+  .showing .body .row.note > .quiet { grid-column: 1 / -1; }
+
+  /* show mode's Light tab, the Sun pane's top (Okay, 25 Oct 2026, "sun locked"; guides.js, row_sunbox): one box, five
+     rows high, its outline in the column's ink with sharp corners, drawn inside the box (an outline, so the columns
+     inside keep the rows' places: "box simply gets an outline with sharp corners to adapt to the environment"); the
+     values at the right as wide as a number box's − +, each name over its figure, flush left on the minuses' line;
+     the picture centred in the open space before them, at the rows' size,
+     names faded and figures in ink ("Labels numbers stack flush left, not editable … Faded colors. Black figures") */
+  .row.sunrow { display: block; padding: var(--u2) 0; box-shadow: none; }
+  .sunbox { display: flex; height: calc(5 * var(--line)); outline: var(--hair) solid var(--ink); outline-offset: calc(-1 * var(--hair)); }
+  .sunbox > .sunpic { flex: 1; margin-right: var(--gap); overflow: hidden; }
+      /* the picture's own colours: 6-preview.css, after the Shadows pane's, a later layer */
+  .sunbox > .sunvalues { flex: none; width: var(--box-steps); display: flex; flex-direction: column; justify-content: space-evenly; white-space: nowrap; }      /* as wide as a number box's − +, so the stack starts on the minuses' line (Okay, 25 Oct 2026, 18:01: "the stack on the right in sun box should align with the minuses boxes from below. Sun centers accordingly") */
+  .sunvalue { display: grid; }
+  .sunvalue > .name { color: var(--grey); }
+  .sunvalue > .figure { color: var(--ink); }
 }

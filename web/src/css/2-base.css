@@ -2,12 +2,16 @@
   :root { font: var(--t-m)/var(--leading) var(--sans); font-variant-numeric: tabular-nums lining-nums; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }      /* no grey box flashing under a finger (#153) */
   html, body { height: 100%; margin: 0; touch-action: pan-x pan-y; overscroll-behavior: none; }      /* fingers scroll, never zoom the window: only the dial zooms, inside the preview (Okay, 15 Oct 2026, 02:19); and the window is never pulled past its edge (#309, 4.46.1) */
-  body { background: var(--paper); color: var(--ink); overflow: hidden; }
-  #app { display: grid; grid-template-columns: calc(var(--panel-w) * (1 - var(--away))) 1fr; grid-template-rows: 1fr calc(var(--bar-height) * (1 - var(--show))); height: 100%;
-    transition: --away var(--view-time) var(--view-ease), --show var(--view-time) var(--view-ease); }
-  #app.snap { transition: none; }      /* into the showcase the layout changes at once and only the dial travels; out, the long way: the bar rises and the panel slides back, eased (app.js) */
+  body { background: var(--paper); color: var(--ink); overflow: hidden; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }      /* an app, not a page: nothing to select by dragging (Okay, 23 Oct 2026: "interface untouchable, like an actual app") */
+  :is(input, textarea) { -webkit-user-select: text; user-select: text; }      /* …but what one types stays selectable */
+  #app { display: grid; grid-template-columns: calc(var(--panel-w) * (1 - var(--away))) 1fr; grid-template-rows: 1fr var(--bar-height); height: 100%;
+    transition: --away var(--view-time) var(--view-ease); }
+  #app.snap { transition: none; }
+  #app.swooping { transition-duration: var(--show-time); }      /* into show mode and out: the slide slower (swoop() in app.js) */      /* no slide: a session that opens in show mode (show_mode() in app.js) */
   #app.away { --away: 1; }
-  #app.show { --show: 1; }      /* the showcase: the bar's row closes at once (showcase() in app.js) */      /* the dial alone: the panel's column closes, eased (the eye switch, dial_alone() in app.js) */
+  .showing { --panel-w: var(--show-panel-w); }
+  #app.showing { grid-template-columns: 1fr calc(var(--panel-w) * (1 - var(--away))); }      /* show mode: the panel's column on the right (show_mode() in app.js, #509) */
+  #app.showing.alone { grid-template-rows: 1fr calc(var(--bar-height) * (1 - var(--away))); }      /* show mode's eye: the bar slides down out of the window with the panel (Okay, 25 Oct 2026: "Eye hides bar too"); the dial side's eye keeps its bar */
   @media (prefers-reduced-motion: reduce) { #app { transition: none; } }
   .starting { padding: var(--margin); }
   h1 { font-size: var(--t-l); font-weight: 600; letter-spacing: -0.005em; margin: 0; }
