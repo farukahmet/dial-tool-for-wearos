@@ -2,23 +2,55 @@
 @layer panel {
   /* the panel: header, tabs, the pinned panes, the panes that scroll. */
   .panel { display: flex; flex-direction: column; min-height: 0; border-right: var(--hair) solid var(--rule); }
-  .panel > header { display: flex; align-items: center; height: var(--header); padding: 0 var(--margin); }
+  .panel > header { display: flex; align-items: center; height: var(--header); padding: 0 var(--margin) var(--hair); }      /* the row is odd (43): a hair kept at its foot, so what is centred in it lands on whole screen dots (the unit box drawn 4 px round its letters, #302) */
   /* the dial alone (Okay, 15 Oct 2026, 04:02): the panel keeps its width and slides left as far as its column closes,
      so it leaves without its lines reflowing; above the preview (z-index) so the mast, which slides back by as much
      and so stays where it was, is over the backdrop once the panel is gone */
-  .sheetgrip { display: none; }      /* a phone's drawer gripper (8-narrow.css); a wider screen has no drawer */
+  .sheetgrip { display: none; }
+  .shenanigans { display: none; }      /* show mode's on/off shortcuts at the column's foot (shenanigans_box() in app.js); the dial side has none (R16) */
+  .showing .shenanigans { display: block; flex: none; padding: 0 var(--margin); background: linear-gradient(var(--ink) 0 0) 50% 0 / 100% var(--thick) no-repeat, var(--column-top, var(--paper)); }      /* its white line across the column's whole width (Okay, 24 Oct 2026, 19:04: "look at the white lines, they are crucial") */
+  /* after his drawing (#525, 19:04): Shadows · Blurs over Flare · Bevels, each a name and its toggle close by; All alone
+     in a third column, a white hairline before it from the top line to the bar */
+  /* three equal columns, All its own third (19:08: "All does get one third column"); in each the name set right against
+     its toggle, so the toggles stand in line (":: Align labels to buttons right"); names in small capitals, a little
+     tracked and a little heavier ("Try all caps small. Bit more tracking bit weight") */
+  .shenticks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .shenticks { grid-auto-rows: var(--control); padding-block: var(--u2); }      /* every line one height, the same room over the first and under the last (19:40: "Greens show equal paddings and alignment") */
+  .shenticks > .row.seg { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--u2); min-height: 0; padding: 0 var(--u4) 0 0; box-shadow: none; background: none; }
+  .shenticks > .row.seg > label { grid-column: 1; text-align: right; font-size: var(--t-xs); font-weight: 500; letter-spacing: var(--track-50); text-transform: uppercase; }
+  .shenticks > .row.seg > .toggle { grid-column: 2; }
+  .shenticks > .row:nth-last-child(2) { grid-column: 3; grid-row: 1; }      /* two lines: Shadows · Blurs · Gradients, Flare · Bevels · All — no bar (Okay, 24 Oct 2026, 19:57: "Remove vertical white bar", Gradients drawn up beside Blurs, the third line cropped) */
+  .shenticks > .row:last-child { grid-column: 3; grid-row: 2; }      /* All: under Gradients, in line with the others */
+  .panelcopy { position: fixed; z-index: 7; pointer-events: none; }      /* the panel's still copy sliding away while the modes change (panel_copy() in app.js) */      /* a phone's drawer gripper (8-narrow.css); a wider screen has no drawer */
   .panel { position: relative; z-index: 5; width: var(--panel-w); translate: calc(-1 * var(--panel-w) * var(--away)) 0; }
-  .mast { display: flex; align-items: center; translate: calc(var(--panel-w) * var(--away)) 0; z-index: 6; }      /* its translate makes it a stacking context, so the bio's z-index counts only inside it: the mast itself stands over the panel's rows, or a later stepper draws over the open bio (Okay, 15 Oct 2026, 10:45) */
+  .mast { display: flex; align-items: center; translate: calc(var(--panel-w) * var(--away)) 0; z-index: 6; }
+  /* show mode (#509; Okay, 22 Oct 2026: "left side slides out, right side slides in"): the same panel on the right, sliding
+     away to the right; its colours from the backdrop (the tokens set on it by show.js tint_panel, #505) */
+  .showing .panel { grid-area: 1 / 2; translate: calc(var(--panel-w) * var(--away)) 0; background: var(--column, var(--paper)); color: var(--ink);
+    --paper: var(--night); --scroll: transparent; --rule-light: var(--rule); --ground: var(--night-field); --row-rule: var(--uiblack, var(--rule)); --line-on-grey: var(--uiblack, var(--rule)); --line-on-paper: var(--uiblack, var(--rule));
+    --well: var(--night-field, var(--ground)); --inset: var(--night-field, var(--ground)); --surface: transparent; }      /* the tokens that are read at :root are set again here, so the tint reaches them */
+  .showing .form { --surface: transparent; --well: var(--night-field, var(--ground)); --inset: var(--night-field, var(--ground)); }
+  .showing .panel { --col: var(--show-col); --margin: var(--show-margin); scrollbar-width: none; }      /* narrower (1-tokens.css); its scrollbar takes no width (it narrowed the rows on a Mac that shows them) */
+  .showing .panel::-webkit-scrollbar { display: none; }
+  .showing .form::-webkit-scrollbar { display: none; }
+  .showing .mast { translate: 0; }
+  #app.showing.alone .mast { translate: calc(-2 * var(--panel-w) * var(--away) + var(--mast-shift, 0px) * var(--away)) 0; }      /* the eye in show mode: the title stays while the panel slides away, as on the dial side — twice the width back, as the panel both moves its column and slides — and goes flush right, the panel's margin from the window's edge (--mast-shift, measured in dial_alone(); Okay, 25 Oct 2026: "on right name needs to stay flush right sadly, an exception") (Okay, 25 Oct 2026: "Dial tool header stays on collapsed panels on show case same as main") */
+  .showing .panel > header { height: var(--header); }      /* main's title line, so the tabs' line falls on the undo buttons' bottom as on the dial side (Okay, 25 Oct 2026, 18:05: "main looks correct"; --header's rule "for the Show Case too"); the Show Case's title line: Dial Tool Show Case, its version, Help and the round swatch — nothing else (Okay, 23 Oct 2026) */
+  .showing .title h1 { white-space: nowrap; }
+  .showing .title h1::after { content: " Show Case"; font-weight: 400; }      /* Dial Tool bold, Show Case not (Okay, 21 Oct 2026, 01:23) */
+  .showing .panel > header :is(.gallerypill, .unit, .title > .quiet:not(.help)) { display: none; }      /* …no version either: hidden from users (Okay, 23 Oct 2026) */
+  .showing .logo { pointer-events: none; cursor: default; }      /* the mark is only a mark here: no bio (Okay, 23 Oct 2026) */
+  .greyswatch { display: none; }      /* show mode's round swatch (grey_swatch() in app.js): the panel's other look, in greys or in the backdrop's colour; dial side: none (R16) */
+  .showing .greyswatch { display: block; flex: none; margin-left: auto; width: var(--bare-dot); height: var(--bare-dot); padding: 0; border: var(--hair) solid var(--rule); border-radius: 50%; background: var(--swatch); cursor: pointer; }
+  .showing main { grid-area: 1 / 1 / 2 / 3; }      /* the canvas runs on under the column, so the backdrop and the watch show through it (Okay, 23 Oct 2026: "Transparency is gone, bring that back"); the drawing is centred in the part left of it (size() in app.js) */
+  .showing .panel > :is(header, .tabs, .pinned) { background-color: var(--column-top, var(--paper)); }      /* the colour alone: the tabs' hairline is their background picture (below), which a whole background here took away (Okay, 25 Oct 2026, 18:05: "missing bar") */      /* the top — title, tabs and the pinned lines — a tenth lighter than the column, as the paper stands over the scrolling grey (Okay, 21 Oct 2026, 01:43) */      /* its translate makes it a stacking context, so the bio's z-index counts only inside it: the mast itself stands over the panel's rows, or a later stepper draws over the open bio (Okay, 15 Oct 2026, 10:45) */
   /* the mast on the backdrop (the dial alone): black or white like the switches, the version a little quieter. Its
      colour follows the slide: from paper's to the backdrop's while the panel's edge sweeps over it (--away 0.55 to
      0.95), both ways, so it shows on whichever is under it; a backdrop changed while away turns it at once */
   #app { --mast-ink: var(--ink); }
   #app.dark { --mast-ink: var(--white); }
-  #app.show { --mast-ink: var(--white); }      /* the showcase's sky is dark whatever the backdrop */
   .mast :is(h1, .logo:not([aria-expanded="true"])) { color: color-mix(in srgb, var(--mast-ink) clamp(0%, (var(--away) - 0.55) * 250%, 100%), var(--ink)); }
   .mast .quiet { color: color-mix(in srgb, color-mix(in srgb, var(--mast-ink) 70%, transparent) clamp(0%, (var(--away) - 0.55) * 250%, 100%), var(--grey)); }
-  .mast .quiet { opacity: calc(1 - var(--show)); }      /* the showcase keeps the mark and "Dial Tool" only */
-  #app.show .mast { opacity: var(--mast-show); pointer-events: none; }      /* the showcase: fainter, and not pressable (Okay, 04:59) */
   .panel :is(.unit, .galleryway) { opacity: calc(1 - 3 * var(--away)); }      /* the unit box and the Gallery pill go first, before they slide under the version */
   /* Okay's mark in the first column, the title after it on the six columns (Okay, 15 Oct 2026, 02:42); a press opens the bio
      under it, a night part as wide as the panel's lines */
@@ -45,31 +77,35 @@
   .unit { position: relative; z-index: 6; margin-left: auto; }      /* a layer of its own, as the mast's: its translate (level_title) makes it one, and at 0 its menu fell under the rows below (Okay, 16 Oct 2026: "Thou falls under") */
   .unitbox { position: relative; box-sizing: content-box; width: var(--ink-w, 1.1em); height: var(--ink-h, 0.6em); padding: var(--unit-pad); border: var(--hair) solid currentColor; color: color-mix(in srgb, var(--ink) calc(var(--faint) * 50%), transparent); font: 400 var(--t-xxs)/1 var(--unit-face); letter-spacing: 0; text-transform: none; }      /* the word in Dial Mono, small letters, its box round their ink (size_unit), its stems as thick as its line, one colour (#302; the pixel font in capitals until 4.44.1) */
   .unitbox > .word { position: absolute; left: calc(var(--unit-pad) + var(--word-x, 0px)); top: calc(var(--unit-pad) + var(--word-y, 0px)); line-height: 1; white-space: nowrap; }      /* its ink the padding from every side, placed by size_unit, whatever the browser does with a button's word (4.44.3) */      /* as light as a switch on the preview that can't be pressed (undo with nothing to undo), its word and its line one colour (Okay, 15 Oct 2026, 03:18); dark under the pointer. Was: its word like the version, its line like the header's */
-  .unitbox:hover { background: var(--hover); color: var(--ink); border-color: var(--ink); }
+  @media (hover: hover) { .unitbox:hover { background: var(--hover); color: var(--ink); border-color: var(--ink); } }
   /* the way to the Gallery: a small pill right after Help, as far from it as Help from the version, at Help's size and
      on the title's baseline (placed by level_title), as high as the unit box; darker than the unit box, lighter than
      Help (Okay, 16 Oct 2026: "Do the same to Gallery pill and put it after help with equal gap. Gallery gets darker
      than mm but lighter than help"; from 15 Oct, 07:45, a pill in the middle of the room, 32 high) */
   .galleryway { flex: none; margin-left: var(--u4); }
   .gallerypill { padding: var(--gallery-lift) var(--u2) 0; border: var(--hair) solid currentColor; border-radius: var(--round-pill); color: color-mix(in srgb, var(--ink) calc(var(--faint) * 100%), transparent); white-space: nowrap; }
-  .gallerypill:hover { background: var(--hover); color: var(--ink); border-color: var(--ink); }
+  @media (hover: hover) { .gallerypill:hover { background: var(--hover); color: var(--ink); border-color: var(--ink); } }
   /* a small menu hanging under its button (the units; the kinds of ring to add): lines a row high, a hairline between them */
   :is(.unitmenu, .addmenu) { position: absolute; z-index: 4; top: calc(100% + var(--unit)); right: 0; min-width: calc(2 * var(--col) + var(--gap)); border: var(--hair) solid var(--ink); background: var(--field); }
   :is(.unitmenu, .addmenu) button { display: flex; align-items: center; gap: var(--gap); width: 100%; height: var(--line); padding: 0 var(--u4); white-space: nowrap; }
   :is(.unitmenu, .addmenu) button + button { border-top: var(--hair) solid var(--rule); }
-  :is(.unitmenu, .addmenu) button:hover { background: var(--hover); }
+  @media (hover: hover) { :is(.unitmenu, .addmenu) button:hover { background: var(--hover); } }
   .unitmenu button { justify-content: space-between; }
   .unitmenu button.on { font-weight: 600; }
   .unitmenu button.on .quiet { color: var(--ink); }
+  /* every menu's list (menu_list in app.js): the unit list's look, fixed to the window under or over its menu, scrolling when long */
+  .unitmenu.floating { position: fixed; z-index: 40; top: auto; right: auto; overflow-y: auto; }
 
   /* sections: a sign inside a ring, its name under it */
   .tabs { display: grid; grid-template-columns: repeat(5, 1fr); margin: 0 var(--margin); padding: var(--u4) 0 0; border-top: var(--hair) solid var(--rule); }
+  .showing .tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding-left: var(--margin); padding-right: var(--margin); border-top: 0; background: linear-gradient(var(--uiblack, var(--rule)) 0 0) 50% 0 / calc(100% - 2 * var(--margin)) var(--hair) no-repeat, var(--column-top, var(--paper)); }      /* show mode's four tabs, equal cells; the band's colour runs to the column's edges (the margins are padding here), its hairline inset by the margin as every line in the column (Okay, 21 Oct 2026, 01:53) */
   .tabs button { display: grid; justify-items: center; gap: var(--unit); padding: var(--unit) 0 var(--u4); color: var(--grey); }
-  .tabs button:hover { color: var(--ink); }
+  @media (hover: hover) { .tabs button:hover { color: var(--ink); } }
   .tabs button:focus-visible { outline-offset: calc(-1 * var(--thick)); }
   .tabs button.on { color: var(--ink); font-weight: 600; box-shadow: inset 0 calc(-1 * var(--triple)) 0 var(--ink); }
   .tabs button.on .ring { fill: var(--ink); stroke: var(--ink); }
   .tabs button.on .sign { color: var(--paper); }
+  .showing .tabs button.on .sign { color: var(--column-solid); }      /* the chosen tab's sign in the column's colour, as the dial side's is in its paper (Okay, 23 Oct 2026: "They were bg color") */
   .tabs button.on .hub { fill: currentColor; }      /* Dial chosen: its centre hole a dot of paper (Okay's drawing, 14 Oct 2026) */
 
   .pinned, .form { padding: 0 var(--margin); }
@@ -91,7 +127,7 @@
   .fold { display: grid; grid-template-columns: var(--eye) auto minmax(0, 1fr); column-gap: var(--gap); align-items: center; width: 100%; height: var(--head); text-align: left; }
   .fold .eye { display: grid; place-items: center; position: relative; left: var(--nudge); }
   .folded > .fold :is(.eye, h2) { color: var(--grey); }
-  .fold:hover :is(.eye, h2) { color: var(--ink); }
+  @media (hover: hover) { .fold:hover :is(.eye, h2) { color: var(--ink); } }
   .fold .summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; font-size: var(--t-s); }
   /* a bare pane, open (the Type pane, #319; Okay, 18 Oct 2026, notes 2: "When expanded, type block header disappears and
      type block moves up"): its heading is the eye alone, in the eyes' column, beside what the pane holds, which starts
@@ -123,7 +159,8 @@
   .pane.tooled.folded > .headtools { display: none; }
   .pane > .headcontrol.reset { justify-self: start; }      /* Reset's button: on its heading line where its warning starts, the controls' column, and only while the pane is open (Okay, 16 Oct 2026, #269; flush left with the warning since 4.44.2: "reset button flush left with explaner text") */
   .pane.folded > .headcontrol.reset { display: none; }
-  .pane > .headcontrol.copylink { justify-self: end; display: inline-flex; align-items: center; gap: var(--u1); }      /* Copy link with its sign, flush right on its heading line, open or folded (Okay, 16 Oct 2026, #277) */
+  .copylink { display: inline-flex; align-items: center; gap: var(--u1); justify-self: start; }      /* a link's Copy button with its sign: Copy link, Copy set link (#523) */
+  .pane > .headcontrol.copylink { justify-self: end; }      /* Copy link flush right on its heading line, open or folded (Okay, 16 Oct 2026, #277) */
   .body { display: grid; grid-template-columns: var(--columns); column-gap: var(--gap); padding-bottom: var(--air); }
   .body > * { grid-column: 2 / -1; }
   .body > :is(.ringlist, .examples) { grid-column: 1 / -1; }

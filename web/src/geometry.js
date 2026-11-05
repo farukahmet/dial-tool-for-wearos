@@ -12,10 +12,10 @@
 //               the same engine the Python test harness uses.
 //   HarfBuzz  — the text engine: kerning, OpenType features, variable axes, language.
 
-export const VERSION = "beta 4.89";
+export const VERSION = "v1.0 beta";      // the name Okay gave this build (27 Oct 2026: "call this a v1.0 beta version from now on"); a small push counts in the third number (v1.0.1 beta), a step in the second (v1.1 beta)
 export const MM = 72 / 25.4;                       // 1 mm in points (files only)
 
-import { moment, window_text, LANGS as MOMENT_LANGS, NAMES as MOMENT_NAMES } from "./moment.js";      // the complications' engine: one moment, a date and the time (#346, 4.62)
+import { moment, window_text, day_list, LANGS as MOMENT_LANGS, NAMES as MOMENT_NAMES } from "./moment.js";      // the complications' engine: one moment, a date and the time (#346, 4.62)
 const { sin, cos, tan, acos, hypot, PI, ceil, abs, min, max, round } = Math;
 const radians = (a) => a * PI / 180;
 const degrees = (a) => a * 180 / PI;
@@ -34,7 +34,7 @@ export const SKIP_FROM = ["nothing", "markers above", "markers & numerals above"
 export const KNOCK_FROM = ["nothing", "markers above", "markers & numerals above", "everything above"];
 export const FROM_KINDS = [[], ["markers"], ["markers", "numerals", "text"], ["ticks", "markers", "numerals", "band", "text"]];      // a text ring counts with the numerals (#297)
 export const MODES = ["upright", "radial", "radial, auto-flip", "on path"];
-export const ANCHORS = ["centre", "baseline", "ascender", "outer edge", "inner edge"];      // the point of a numeral that sits on its ring's radius (web version, 13 Oct 2026). Only grows at its end (R9). The edges (4.53, #338; Okay, 18 Oct 2026: "Tangent to inner or outer"): every numeral's ink touches the radius from inside, or from outside
+export const ANCHORS = ["centre", "baseline", "ascender", "outer edge", "inner edge", "cap middle"];      // cap middle (#13, 4.90): every label on the middle of the font's capitals, not of its own ink      // the point of a numeral that sits on its ring's radius (web version, 13 Oct 2026). Only grows at its end (R9). The edges (4.53, #338; Okay, 18 Oct 2026: "Tangent to inner or outer"): every numeral's ink touches the radius from inside, or from outside
 export const FROM = ["outer", "middle", "inner"];               // the point of a mark or a band that sits on its ring's radius: its outer end, its middle, its inner end (#257, 4.47). Only grows at its end (R9)
 /** how far a mark's or band's outer edge lies outside the ring's radius: nothing when the radius measures to the outer
  *  end, half its extent from the middle, all of it from the inner end (#257). extent: the mark's length or the band's width. */
@@ -45,9 +45,9 @@ export const DATE_AT = [["3", 90], ["4:30", 135], ["6", 180], ["9", 270], ["12",
 export const WINDOW_KINDS = ["date", "day", "am · pm", "moon phase", "big date"];      // big date appended (4.74, R9): two square holes, the tens and the units each on a disc of its own      // what a window shows (web version)
 // the hole's shape, apart from what shows through it (Okay, 13 Oct 2026). 0, the start, is "as its kind": an arch for a
 // moon phase, a rectangle for the others — what was drawn before there was a choice (R31). Only grows at its end (R9).
-export const WINDOW_SHAPES = ["as its kind", "rectangle", "circle", "polygon", "arch", "arc"];
+export const WINDOW_SHAPES = ["as its kind", "rectangle", "circle", "polygon", "arch", "arc", "half"];      // half: an am · pm window's own, chosen as a shape (20 Oct 2026; appended, R9)
 export const window_shape = (w) => WINDOW_SHAPES[w.shape] && w.shape ? WINDOW_SHAPES[w.shape]
-  : WINDOW_KINDS[w.kind] === "moon phase" ? (w.look ? "circle" : "arch") : WINDOW_KINDS[w.kind] === "am · pm" ? "half"
+  : WINDOW_KINDS[w.kind] === "moon phase" ? (w.look ? "circle" : "arch") : WINDOW_KINDS[w.kind] === "am · pm" ? (w.ampm_form ? "rectangle" : "half")
   : WINDOW_KINDS[w.kind] === "big date" ? "pair" : "rectangle";      // a big date: two square holes side by side (4.74)      // a moon's Phase and Line sit in a round hole, an am · pm Half in a half-round one (4.73)      // a moon's Phase and Line pictures sit in a round hole (4.73)
 // what a moon window pictures (4.73, #346; the disc sketches B and C, Okay, 18 Oct 2026: "All are good"): Arch (the
 // humps) · Phase (the moon as it is lit, in three colours) · Line (its outline and dark side, one ink). An am · pm
@@ -79,13 +79,15 @@ export const RING_BASE = {
   shape: 0, file: "", scale: 1.0, len: 2.8, w: 0.7, taper: 0.35, round_out: 0.0, round_in: 0.0, wall: 0.0,
   twelve: 0, twelve_scale: 1.0, twelve_gap: 0.5,
   labels: 0, custom: "", num_from: 0.0, num_step: 5.0, num_digits: 0, mode: 0, size: 2.4, nudge: {},
-  family: "Helvetica Neue", ps: "HelveticaNeue", tracking: 0.0, lang: 0, axes: {}, features: {},
+  family: "Arimo", ps: "Arimo-Regular", tracking: 0.0, lang: 0, axes: {}, features: {},
   width: 1.0, fill: 100.0,
   num_again: 0,                                    // Numbers: the count starts again after this many positions (0 = never), as on Ferguson's dial or a two-hour track (13 Oct 2026)
   guide: -1,                                       // its guide's colour (preview only, R5): a place in GUIDE_COLOURS · -1 = one by its place in the list (ring_guide) · -2 = none (13 Oct 2026)
   anchor: 0,                                       // numerals: what the radius measures to, a place in ANCHORS. 0 = the text's centre, as before (R31)
   from: 0,                                         // ticks, markers, bands: what the radius measures to, a place in FROM — the mark's or band's outer end, its middle, or its inner end (Okay's notes, p. 9, #257: "resize from"). Starting at outer, every link draws as before (R31)
   cs: {},                                          // a band's sectors with a colour of their own: position → RGBA. Empty = all in the ring's colour (beta 4.6)
+  ink_d: 0,                                        // an older file's step of this ring's ink from w_ink (#521); read once, into w_inks, by fresh_settings (R8)
+  ink_b: false,                                    // show mode's Inks (#545): with its colour split into two inks, this ring is printed with ink B; the file and the session, not the link (R7)
 };
 export const TYPE_KEYS = ["family", "ps", "size", "tracking", "lang", "axes", "features"];
 
@@ -110,6 +112,11 @@ export const HAND_BASE = {
   // old links for window"): its outer end at the hand's Length, or at the disc's edge if Length reaches past it. Off to
   // start, as every older dial was drawn (R31: no new scheme); a hand made a disc in the tool turns it on (app.js)
   mark_in: false,
+  // its bevel on or off (Okay, 19 Oct 2026: "on off from hand window"; 20 Oct 2026, 01:33: the tick "appears as soon as
+  // show tick turned on"): the shading Shadows → Bevels % draws on a hand, per hand. Off to start ("Hand bevel off on
+  // default", 19 Oct). An older link or file that drew bevels (Bevels % above 0, no per-hand key) gets them on every
+  // hand when read (fresh_settings), so it draws as before (R31: no new scheme)
+  bevel: false,
 };
 
 // windows 2 to 4 (web version, beta 3.0). Window 1 is the date window both tools know: its keys are da_….
@@ -129,19 +136,26 @@ export const WINDOW_BASE = {
   guide: -1,                                       // its guide's colour, as a ring's (#271): a place in GUIDE_COLOURS · -1 = by its place (window_guide) · -2 = none
   follows: true,                                   // a date, day or moon window shows the bar's date; on to start, and for every link (Okay, 19 Oct 2026, 21:09, #413: "All on by default", for old links too)
   names: 0,                                        // a day window following the date: its names' language, a place in moment.js LANGS (EN · TR · DE · FR · IT; 4.62)
+  day_form: 0,                                     // … and how they are written, a place in moment.js DAY_FORMS: short as before, in full, or your own (#515)
+  own_names: null,                                 // your own words: a day window's seven (Custom), an am · pm window's two (Text); null or a blank = the tool's (#515, #516)
+  ampm_form: 0,                                    // an am · pm window shows: 0 its disc under a half-round hole, as before · 1 its words, jumping at noon and midnight (#516)
+  jump: false,                                     // an am · pm disc jumps at noon and midnight instead of sweeping (#401, 4.90; Okay, 19 Oct 2026, 14:13: "am pm gets a jump function on/off"); off, it sweeps, as before
   neighbours: true,                               // a date or day window shows its disc's places either side of the shown one, where the hole lets them (4.74; the disc sketch D1), in c2
   look: 0,                                         // its picture, a place in PICTURES[its kind] (4.73); 0 = as before
   c2: null, c3: null,                              // its picture's further colours (4.73): a moon's shade · an am · pm half's sun and moon · a band's dawn and dusk; null = the picture's own (PICTURE_TONES)
   physics: true,                                   // its disc stays inside the case (4.72, #346): passing it, its guide shows red and the panel says so; off for a face on a screen, where a disc may be bigger than the dial
   wh_link: false,                                  // width and height linked: one changed, the other keeps their ratio (#358, beta 4.57); off, so every link draws and behaves as before
+  depth: null,                                     // its disc's depth under the plate, mm, for the shadows (#526, 4.95: a row per disc in the Shadows pane); null = the shared sh_disc
+  frame_b: false,                                  // show mode's Inks (#545): with its frame's colour split into two inks, the frame is printed with ink B; the file and the session, not the link
+  print_h: null,                                   // show mode's Inks (#545): how high what is printed on its disc stands, mm; null = INK_MM; the file and the session, not the link
 };
 const FIRST_WINDOW = { on: "da_on", kind: "da_kind", at: "da_at", r: "da_r", w: "da_w", h: "da_h", round: "da_round", frame: "da_frame",
   clear: "da_clear", text: "da_day", size: "da_size", ink: "da_ink", hour: "da_hour", age: "da_age",
-  shape: "da_shape", sides: "da_sides", turn: "da_turn", text_turn: "da_text_turn", family: "da_family", ps: "da_ps", axes: "da_axes", text_c: "da_text_c", disc_c: "da_disc_c", guide: "da_guide", tracking: "da_tracking", lang: "da_lang", features: "da_features", at_deg: "da_at_deg", wh_link: "da_wh_link", follows: "da_follows", names: "da_names", physics: "da_physics", look: "da_look", c2: "da_c2", c3: "da_c3", neighbours: "da_neighbours" };
+  shape: "da_shape", sides: "da_sides", turn: "da_turn", text_turn: "da_text_turn", family: "da_family", ps: "da_ps", axes: "da_axes", text_c: "da_text_c", disc_c: "da_disc_c", guide: "da_guide", tracking: "da_tracking", lang: "da_lang", features: "da_features", at_deg: "da_at_deg", wh_link: "da_wh_link", follows: "da_follows", names: "da_names", physics: "da_physics", look: "da_look", c2: "da_c2", c3: "da_c3", neighbours: "da_neighbours", jump: "da_jump", day_form: "da_day_form", own_names: "da_own_names", ampm_form: "da_ampm_form", depth: "da_depth", frame_b: "da_frame_b", print_h: "da_print_h" };
 
 export const DEFAULTS = {
   version: 2,
-  dial_d: 30.0, margin: 3.0, guides: true,
+  dial_d: 30.0, margin: 3.0, guides: false,      // guides off to start; they show while a number is slid or a ring sized, and go when it stops (#485: "Defaults are all off, but while things resize")
   dial_hole: 2.7,                                  // the centre hole's Ø (#165, 14 Oct 2026; web only, R30); 0 = none. Okay waived R31 for it: old links get the hole too
   c_plate: [0.93, 0.91, 0.86, 1], c_backdrop: [0.80, 0.80, 0.78, 1],
   rings: [],
@@ -153,11 +167,22 @@ export const DEFAULTS = {
   da_shape: 0, da_sides: 6, da_turn: false, da_text_turn: true, da_family: "", da_ps: "", da_axes: {}, da_text_c: null, da_disc_c: null, da_tracking: null, da_lang: null, da_features: null, da_at_deg: null,      // window 1's share of WINDOW_BASE's keys of 13 Oct 2026
   t: 10 * 3600 + 9 * 60 + 36,
   out_production: false, out_mirror: false, out_live_text: false,
+  // what a file for production holds (the production debts, #219–#224; 4.90): every one starts as files were made
+  // before, so older links and files draw as they did (R31, no new scheme). Preview and files alike (R26: one scene)
+  out_window_content: true,                        // #219: what the windows show (discs, numbers, pictures); off, their holes stay empty, for a printer who prints the face alone
+  out_hidden_cut: false,                           // #221: a hidden ring still knocks out and skips as if it were there, so a film made by hiding rings keeps its holes
+  out_cutlines: true,                              // #222: a mask's cut lines (each window's, the centre hole's); off, the mask holds only what is etched
+  out_invert: false,                               // #223: a mask inverted inside the dial — toner everywhere but the marks, for sunk marks
+  out_ink: "",                                     // #35: a mask of one ink only (#RRGGBB), or "" for every ink — set by the export for each film, not kept between files
+  out_marks: false,                                // #224: a mask's blank outline and four registration marks in the page's corners
+  // a set of files in one press (#171; atlas 6.3): which of FILE_SET it writes
+  out_f_pdf: true, out_f_svg: false, out_f_png: false, out_f_mask: false, out_f_mirrored: false, out_f_mask_png: false, out_f_sheet: false, out_f_spec: false,
   out_paper: 0, out_copies: 0, out_gap: 3.0, out_cutline: false,      // a print sheet (4.75, #348): its paper (output.js PAPERS: A4 · Letter · A5), how many (0 = as many as fit), the room between, a cut line round each
   out_dpi: 600.0, out_seconds: 4.0, out_fps: 30.0, out_px: 1080,
   ui_section: 0, ui_ring: 0, ui_hand: 0, ui_preview: 0, ui_window: 0,
   ui_unit: 0,                                      // the unit lengths are shown and typed in: a place in UNITS. Settings stay in mm (R1)
   ui_scale: false,                                 // changing the diameter scales everything on the dial with it (the window's state: not in a link)
+  ui_weight: 100,                                  // Weight % (#88): every width on the dial times this, from the widths as they were when it was last moved; the widths carry it, so it is the window's state, not in a link
   // guides: preview only, never in a file (R5). Five kinds, each with an eye (shown or not) and a colour:
   // a place in GUIDE_COLOURS (R9: a number, never the colour itself). One thickness (screen points) for all;
   // the selected ring's lines are half as thick again. (beta 4.5, 12 Oct 2026)
@@ -171,13 +196,46 @@ export const DEFAULTS = {
   da_guide: -1,                                   // the first window's guide colour, as every window's `guide` (#271)
   da_follows: true, da_names: 0,                   // the first window's `follows` and `names`: following the bar's date to start (#413)
   wearos_name: "",                                 // a Wear OS watch face's name (4.67, farukahmet's PR #1); "" = Dial Tool. Its package's name follows from it
-  strap: 1, c_strap: [0.29, 0.2, 0.14, 1],      // its strap (4.69, bezels.js STRAPS): 0 none, 1 a leather strap in c_strap, 2 a metal bracelet in the case's metal. Shown only with a case
-  bezel: 0,                                        // a case round the dial on the preview (4.66, bezels.js BEZELS): 0 none, 1 diver, 2 pilot, 3 dress, 4 sport. Preview only, like the backdrop (R26)
+  strap: 1, c_strap: [0.29, 0.2, 0.14, 1],      // the strap round the dial (watch.js): 0 and 1 a leather strap in c_strap, 2 a bracelet in the case's metal (on the diver alone; elsewhere leather), 4 the diver's links bracelet (Emre's H-links; Okay, 25 Oct 2026: "Links add"), 3 a NATO (w_nato). Never none (Okay, 22 Oct 2026)
+  bezel: 0,                                        // the case round the dial (watch.js, CASE_OF_BEZEL): the list only grows (R9). 0 dress, 1 diver, 2 field, 3 dress, 4 field, 5 emre01 — 2 and 4 were the pilot and sport sketches, 0 "no case": no watch is caseless now (Okay, 22 Oct 2026). Preview only (R26)
+  // ── w_: the watch round the dial in show mode (22 Oct 2026, build list #509; R7). Kept in the settings file and the
+  // session, never in a link (R31: these keys are not in LINK_KEYS). Lists only grow at their end (R9).
+  w_style: 1,            // the paint: 0 Engineer, 1 Miyazaki (watch.js). The dial side draws Engineer, flat, whatever this says
+  w_lighting: 0,         // 0 dramatic (the spotlight pool and the flare), 1 flat
+  w_view: 0,             // what Fit shows in show mode: 0 the detail (lug tip to lug tip), 1 the whole watch, 2 the dial as the dial side
+  w_metal: 1,            // 0 steel, 1 gold, 2 aluminium, 3 bronze, 4 titanium, 5 black
+  c_metal: null,         // a case colour of your own; null = the metal's preset
+  w_nato: 1,             // the NATO's pattern: 0 bond, 1 regimental, 2 khaki, 3 black · grey, 4 olive, 5 grey (strap 3 = a NATO)
+  c_nato: null,          // its three stripe colours, your own; null = the pattern's
+  w_insert: 0,           // the diver's insert: 0 black, 1 blue, 2 green, 3 pepsi, 4 batman, 5 coke, 6 root beer, 7 sprite
+  c_insert: null,        // its two colours (top, bottom), your own; null = the preset
+  w_ink: 6,              // an older file's ink height, in steps of INK_STEP_MM; read once, into w_ink_all, by fresh_settings (R8)
+  w_inks: {},            // show mode's Inks (#545): each ink by its colour, "#RRGGBB" → { h: mm, two: split into inks A and B, b: B's mm }; a colour not in it stands at INK_MM, one ink
+  w_ink_all: 0,          // All inks at once (#545): mm added to every printed height, every ink keeping its own (Okay, 24 Oct 2026: "adding to or subbing from each same amount")
+  w_flare_on: true, w_flare: 0,      // the flare on the case's edge; its kind: 0 an arc along the edge, 1 a dot
+  w_fl_size: 100, w_fl_tint: 45, w_fl_bright: 100,      // the flare: size %, how close to the case's colour %, brightness %
+  w_glass_fat: 100, w_glass_len: 100, w_glass_op: 100,      // the shine on the glass: width %, length %, opacity %
+  w_grounds: [],         // show mode's backdrops of your own (#510; Okay, 25 Oct 2026: "Adding colors or gradients by user possible, save file carries those too"): each [colour] or [first, second], colours as c_backdrop's; added at the end
+  w_ground_auto: false,  // Backdrop › Auto: the ground follows the paint's own (Engineer Stone, Miyazaki Umber; watch.js presets().floor), as the Show Case's opener did; picking any other backdrop turns it off
+  c_backdrop2: null,     // a second backdrop colour: a gradient at 45°, the backdrop's colour at the top left, this at the bottom right; null = one colour
+  out_watch_px: 3000,    // the watch's PNG or PDF, pixels along its longer side
+  ui_show: false,        // show mode on (the panel on the right with the show tabs, the watch round the dial)
+  ui_show_section: 6, ui_edit_section: 0,      // the tab last used in show mode (Watch to start) and on the dial side (SECTIONS numbers, R9)
+  ui_grey_panel: false,      // show mode's panel in greys, like the bar, instead of the backdrop's colour (the round swatch at the title line's end; Okay, 22 Oct 2026)
+  w_bevels: true,      // show mode draws the hands' bevels (Shenanigans' Bevels: Okay, 23 Oct 2026)
+  w_gradients: true,   // show mode's gradients — the backdrop's, Dramatic's spotlight, the outline's light — on (Shenanigans' Gradients, #525: "Both")
+  ui_case: false,      // the case round the dial on the dial side: off to start (Okay, 23 Oct 2026: "On main default is caseless"); its kind is `bezel`, shared with show mode, which always has one
+  ui_effects: true,      // the costly layers in show mode — blurs, the flare, the glass shine, the silhouette outline (Okay: "turn off shenanigans")
   date: "",                                        // the day the dial shows, "2026-10-18", set in the bar (4.62; Okay, 18 Oct 2026: "Date best set at the bar … Default from system date"); "" = today, wherever the dial is opened
+  da_jump: false,                                  // … and `jump` (#401, 4.90)
+  da_day_form: 0,                                  // … and `day_form` (#515)
+  da_own_names: null, da_ampm_form: 0,             // … and `own_names`, `ampm_form` (#515, #516)
+  da_depth: null,                                  // … and `depth` (#526)
+  da_frame_b: false, da_print_h: null,             // … and `frame_b`, `print_h` (#545)
   da_look: 0, da_c2: null, da_c3: null, da_neighbours: true,      // … and `neighbours` (4.74)            // the first window's `look`, `c2`, `c3` (4.73)
   da_physics: true, xray: false,                   // the first window's `physics` · X-ray, every window's disc seen under a veil of the plate, preview only (4.72, #346)
   da_wh_link: false,                               // the first window's width and height linked, as every window's `wh_link` (#358, beta 4.57)
-  gd_k_edge: 1, gd_k_axes: 0, gd_k_win: 1, gd_k_rings: 1, gd_k_sel: 4, gd_w: 1.0,
+  gd_k_edge: 1, gd_k_axes: 0, gd_k_win: 1, gd_k_rings: 1, gd_k_sel: 4, gd_w: 0.75,
   // shadows: preview only, never in a file (R5, R26). One light, far away: it comes from a clock angle (sh_from, degrees)
   // at a height over the dial (sh_rise, degrees above the plate's face). Each hand floats at its own height over the
   // plate (mm); the cap's top is the top of the stack; the date discs lie sh_disc mm under the plate's face. A thing
@@ -187,7 +245,7 @@ export const DEFAULTS = {
   // 2026, 23:05, a picture of the list: "these in the image are the default values"); the movement, not chosen yet,
   // will fix the real heights.
   sh_on: true, sh_from: 270, sh_rise: 35, sh_dark: 25, sh_blur: false,
-  sh_bevel: 0,                                     // the hands' bevels, 0–100 % (4.79; Okay, 19 Oct 2026: "Hand bevel off on default, add an adjuster"); 100 = as 4.77 drew them
+  sh_bevel: 100,                                   // the hands' bevels' strength, 0–100 % (Okay, 19 Oct 2026: "Hand bevel off on default, add an adjuster"): a hand's own Bevel tick turns its bevel on (HAND_BASE.bevel, off to start); 100 = as 4.77 drew them
   sh_hour: 0.15, sh_minute: 0.35, sh_second: 0.6, sh_cap: 0.75, sh_disc: 0.15,
   gd_more: [],                                     // guides added by hand: lines, crosshairs, circles (GUIDE_MORE). gd_k_rings and gd_k_sel: unread, a ring's guide has the ring's own colour
   // the next five keys are unread: old settings files carry them (R8). Nothing writes them any more.
@@ -240,8 +298,25 @@ export function radial_extent(path) {
  *  · k: a place in GUIDE_COLOURS, -2 = none. line: a diameter at angle a · crosshair: a small cross at angle a and
  *  radius r, to mark a point · circle: radius r. The list only grows at its end (R9). */
 export const GUIDE_MORE = ["line", "crosshair", "circle"];
-export const NOT_GEOMETRY = ["t", "guides", "xray", "bezel", "strap", "c_strap", "wearos_name", "ui_section", "ui_ring", "ui_hand", "ui_window", "ui_preview", "ui_scale", "ui_unit"];
+/** the case each `bezel` number draws (R9: numbers keep their meaning; a new kind is appended) and the number the menu writes for a kind */
+export const CASE_OF_BEZEL = ["dress", "diver", "field", "dress", "field", "emre01"];
+export const BEZEL_OF_CASE = { dress: 3, diver: 1, field: 2, emre01: 5 };
+export const NOT_GEOMETRY = ["t", "guides", "xray", "bezel", "strap", "c_strap", "wearos_name", "ui_section", "ui_ring", "ui_hand", "ui_window", "ui_preview", "ui_scale", "ui_unit",
+  "w_style", "w_lighting", "w_view", "w_metal", "c_metal", "w_nato", "c_nato", "w_insert", "c_insert", "w_ink", "w_inks", "w_ink_all", "w_flare_on", "w_bevels", "w_flare", "w_fl_size", "w_fl_tint", "w_fl_bright", "w_glass_fat", "w_glass_len", "w_glass_op", "c_backdrop2", "w_grounds", "w_ground_auto", "out_watch_px", "ui_show", "ui_show_section", "ui_edit_section", "ui_effects", "ui_grey_panel", "ui_case"];
+/** a set of files (#171): its tick's key, its words, the kind export() writes, and what it writes it as — the colour
+ *  files plain (not a mask, not mirrored), the masks as said; the print sheet as Print says. */
+export const FILE_SET = [
+  ["out_f_pdf", "Dial · PDF", "pdf", { out_production: false, out_mirror: false }],
+  ["out_f_svg", "Dial · SVG", "svg", { out_production: false, out_mirror: false }],
+  ["out_f_png", "Dial · PNG", "png", { out_production: false, out_mirror: false }],
+  ["out_f_mask", "Mask · PDF", "pdf", { out_production: true, out_mirror: false }],
+  ["out_f_mirrored", "Mirrored mask · PDF", "pdf", { out_production: true, out_mirror: true }],
+  ["out_f_mask_png", "Mirrored mask · PNG", "png", { out_production: true, out_mirror: true }],
+  ["out_f_sheet", "Print sheet · PDF", "sheet", {}],
+  ["out_f_spec", "Spec sheet · SVG", "spec", { out_production: false, out_mirror: false }],
+];
 export const NOT_GEOMETRY_PREFIX = ["c_", "ha_", "out_", "gd_", "sh_"];
+export const GEOMETRY_AFTER_ALL = ["out_hidden_cut"];      // under a quiet prefix, but it changes the rings' shapes (#221)
 
 /** base values + d's values (deep copies), names turned into popup indexes. */
 export function complete(base, d) {
@@ -287,7 +362,7 @@ const BETA1_DEFAULTS = {
   tr_rail: false, tr_rail_w: 0.1, tr_collision: 0, tr_clear: 0.25,
   mk_shape: 0, mk_svg: "", mk_at: 0, mk_len: 2.8, mk_w: 0.7, mk_offset: 0.0, mk_taper: 0.35,
   mk_round_out: 0.0, mk_round_in: 0.0, mk_wall: 0.0, mk_twelve: 0, mk_twelve_scale: 1.0, mk_twelve_gap: 0.5,
-  ty_family: "Helvetica Neue", ty_ps: "HelveticaNeue", ty_size: 2.4, ty_tracking: 0.0,
+  ty_family: "Arimo", ty_ps: "Arimo-Regular", ty_size: 2.4, ty_tracking: 0.0,
   ty_lang: 0, ty_axes: {}, ty_features: {},
   nu_set: 0, nu_custom: "", nu_at: 0, nu_mode: 0, nu_r: 10.0, nu_nudge: {},
   ha_on: true, ha_style: 0, ha_svg_hour: "", ha_svg_min: "", ha_svg_sec: "",
@@ -375,8 +450,21 @@ export function fresh_settings(over = null) {
   const S = clone(DEFAULTS);
   for (const k in over) if (k in S) S[k] = clone(over[k]);
   S.rings = S.rings.map((r) => complete(RING_BASE, r));
+  // a numerals ring's radius is its band's middle, outer or inner circle (#488): centre, baseline, ascender and cap
+  // middle all read as the middle, place 0 (R9: the list keeps them)
+  for (const r of S.rings) if (![0, 3, 4].includes(+r.anchor)) r.anchor = 0;
   if (!S.rings.length) S.rings = [complete(RING_BASE, {})];
+  // bevels from before a hand had its own tick: Bevels % above 0 drew them on every hand, so a hand that doesn't say gets one (a link
+  // made since always says, lean())
+  if ("sh_bevel" in over && +over.sh_bevel > 0) for (const h of HANDS) { const raw = over["ha_" + h]; if (!raw || !("bevel" in raw)) S["ha_" + h] = { ...(S["ha_" + h] || {}), bevel: true }; }
   for (const h of HANDS) S["ha_" + h] = complete(HAND_BASE, S["ha_" + h]);
+  // inks in steps, from before show mode's Inks (#545): All inks (w_ink, 6 to start) becomes the mm added to every ink,
+  // and a ring's own step (ink_d) its colour's height — the first ring of a colour says it
+  if (!("w_inks" in over) && ("w_ink" in over || S.rings.some((r) => r.ink_d))) {
+    S.w_ink_all = +((S.w_ink - INK_START) * INK_STEP_MM).toFixed(3);
+    S.w_inks = {};
+    for (const r of S.rings) if (r.ink_d && Array.isArray(r.c)) { const hex = ink_hex(r.c); if (!S.w_inks[hex]) S.w_inks[hex] = { h: +(INK_MM + r.ink_d * INK_STEP_MM).toFixed(3) }; }
+  }
   S.windows = [0, 1, 2].map((i) => ({ ...clone(WINDOW_BASE), ...((Array.isArray(S.windows) && S.windows[i]) || {}) }));
   S.ui_window = min(max(parseInt(S.ui_window) || 0, 0), 3);
   S.ui_ring = min(max(parseInt(S.ui_ring) || 0, 0), S.rings.length - 1);
@@ -395,7 +483,7 @@ export function fresh_settings(over = null) {
 //   it went up because an am · pm window now draws its one disc whatever its old `look`, so a scheme-2 link with the
 //   Sky or Band picture would draw something else. Links of schemes 1 and 2 are not read (R31).
 
-export const LINK_SCHEME = 3;      // 3 since 4.88: an am · pm window draws its one disc whatever its old `look` (R31)
+export const LINK_SCHEME = 5;      // 5 since 4.92.18: a ring's starting font is Arimo, bundled, instead of Helvetica Neue, which isn't (#228; Okay, 24 Oct 2026: "Bundled fonts are all free to use"); 4 since 4.91: a numerals ring sits in its cap-height band (#488); 3 since 4.88: an am · pm window draws its one disc (R31)
 
 /** the topmost hand that shows: its place in HANDS, or -1 */
 export const top_hand = (S) => [2, 1, 0].find((i) => S["ha_" + HANDS[i]].on) ?? -1;
@@ -442,6 +530,15 @@ export const LINK_KEYS = [
   // (#347) carry it. From here on: only ever under the last line, and test/link-keys.json says so (linktrip.mjs).
   "sh_bevel",               // 4.79: appended; off to start
   "hub", "bulge",           // 4.80: appended; no hub and the leaf as always to start, so every older link looks as before
+  "bevel",                  // 4.89.1: appended; on to start, so every older link looks as before
+  "out_window_content", "out_hidden_cut", "out_cutlines", "out_invert", "out_marks",      // 4.90 (#219–#224): appended; each starts as files were, so every older link looks as before
+  "out_f_pdf", "out_f_svg", "out_f_png", "out_f_mask", "out_f_mirrored", "out_f_mask_png", "out_f_sheet", "out_f_spec",      // 4.90 (#171, #18): appended; what a set of files holds
+  "out_ink",                // 4.90 (#35): appended; "" to start, every ink in one mask as before
+  "jump", "da_jump",        // 4.90 (#401): appended; off to start, the disc sweeps as before
+  "day_form", "da_day_form",      // 4.92.3 (#515): appended; short to start, as every older link
+  "own_names", "da_own_names", "ampm_form", "da_ampm_form",      // 4.92.11 (#515, #516): appended; none and the disc to start, as every older link
+  "ink_d",                  // 4.92.15 (#521): appended for the table's sake; lean() leaves it out of a link (R7)
+  "depth", "da_depth",      // 4.95 (#526): appended; null to start = the shared sh_disc, as every older link
 ];
 const CODE_DIGITS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const code_of = (i) => (i < 62 ? CODE_DIGITS[i] : CODE_DIGITS[Math.floor(i / 62) - 1] + CODE_DIGITS[i % 62]);
@@ -521,7 +618,7 @@ export function un_base32(text) {
 /** what the part after # is: a scheme-2 dial's letters, a link of an older scheme, or not a dial at all. */
 export function link_kind(hash) {
   const h = (hash || "").replace(/^#/, "");
-  if (/^[23][0-9A-Za-z]+$/.test(h)) return { scheme: +h[0], letters: h.slice(1) };      // schemes 2 and 3: the same writing after their number
+  if (/^[2-9][0-9A-Za-z]+$/.test(h)) return { scheme: +h[0], letters: h.slice(1) };      // schemes 2 on: the same writing after their number
   if (/^[01]\.[A-Za-z0-9_~-]+$/.test(h)) return { scheme: +h[0] };
   return null;
 }
@@ -533,15 +630,22 @@ function differing(d, base) {
 }
 
 /** the settings, without everything that still has its starting value and without the window's own state. */
+/** the watch's own keys (show mode): kept in the file and the session, never in a link (Okay, 22 Oct 2026) */
+export const NOT_IN_LINK = (k) => k.startsWith("w_") || ["c_metal", "c_nato", "c_insert", "c_backdrop2", "out_watch_px", "ink_b", "frame_b", "print_h", "da_frame_b", "da_print_h"].includes(k);      // the inks' split and heights (#545) are show mode's too
 export function lean(S) {
   const out = {};
   for (const k in S) {
-    if (k.startsWith("ui_") || k === "version" || JSON.stringify(S[k]) === JSON.stringify(DEFAULTS[k])) continue;
-    if (k === "rings") out.rings = S.rings.map((r) => differing(r, RING_BASE));
-    else if (k === "windows") out.windows = S.windows.map((w) => differing(w, WINDOW_BASE));
+    if (k.startsWith("ui_") || k === "version" || NOT_IN_LINK(k) || JSON.stringify(S[k]) === JSON.stringify(DEFAULTS[k])) continue;
+    if (k === "rings") out.rings = S.rings.map((r) => { const d = differing(r, RING_BASE); delete d.ink_d; delete d.ink_b; return d; });      // a ring's ink is show mode's: not in the link (R7)
+    else if (k === "windows") out.windows = S.windows.map((w) => { const d = differing(w, WINDOW_BASE); delete d.frame_b; delete d.print_h; return d; });
     else if (HANDS.some((h) => k === "ha_" + h)) out[k] = differing(S[k], HAND_BASE);
     else out[k] = S[k];
   }
+  // with Bevels % in it, every hand says its Bevel, so fresh_settings never takes it for an older link. A hand left out
+  // above (still the starting hand) is written whole against HAND_BASE here, never as `{ bevel }` alone: a hand object
+  // in a link replaces the starting hand entirely, so a bare one would come back as HAND_BASE (the plain hand), not as
+  // DEFAULTS' (found 25 Oct 2026)
+  if ("sh_bevel" in out) for (const h of HANDS) out["ha_" + h] = { ...differing(S["ha_" + h] || {}, HAND_BASE), bevel: Boolean(S["ha_" + h] && S["ha_" + h].bevel) };
   return out;
 }
 
@@ -552,10 +656,12 @@ export function lean(S) {
 // ── the engines ──────────────────────────────────────────────
 
 let PK = null;                                     // PathKit (shape combining)
+let PK_VERB = null;                                // our command letters as PathKit's verbs (set at start)
 let HB = null;                                     // HarfBuzz (text)
 
 export function start(pathkit, harfbuzz) {
   PK = pathkit;
+  PK_VERB = { M: PK.MOVE_VERB, L: PK.LINE_VERB, C: PK.CUBIC_VERB, Z: PK.CLOSE_VERB };
   HB = harfbuzz;
 }
 
@@ -706,6 +812,12 @@ export class Path {
   _wound() {
     const parts = this.contours().map((c) => ({ c, pts: c._points() })).filter((o) => o.pts.length > 2);
     if (parts.length < 2) return this;
+    for (const o of parts) {                       // each contour's box: a probe outside it can't be inside the contour, so most pairs are settled without the crossing count (a 60-tick ring is 60 contours: 3,600 pairs a frame before, a few after)
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const [x, y] of o.pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      o.box = [x0, y0, x1, y1];
+    }
+    const in_box = (p, [x0, y0, x1, y1]) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1;
     const inside = (p, pts) => {
       let hit = false;
       for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
@@ -718,7 +830,7 @@ export class Path {
     const out = new Path();
     for (const o of parts) {
       const probe = [(o.pts[0][0] + o.pts[1][0]) / 2, (o.pts[0][1] + o.pts[1][1]) / 2];
-      const depth = parts.filter((other) => other !== o && inside(probe, other.pts)).length;
+      const depth = parts.filter((other) => other !== o && in_box(probe, other.box) && inside(probe, other.pts)).length;
       const hole = depth % 2 === 1, clockwise = area(o.pts) < 0;
       out.appendPath(hole === clockwise ? o.c : o.c._reversed());
     }
@@ -726,12 +838,32 @@ export class Path {
   }
 
   // shape combining — through PathKit, the result comes back as a plain path
+  /** this path as PathKit's (its commands handed over as numbers, not written out and read back: that round trip
+   *  cost more than the shape work itself — measured 25 Oct 2026, 2.3 ms against 0.3 for a ten-figure word). */
+  _pk() { return PK.FromCmds(this.d.map((c) => [PK_VERB[c[0]], ...c.slice(1)])); }
+  /** PathKit's path → ours, from its commands. A conic (a stroke's round cap) has no place in our commands: that path
+   *  is read from PathKit's SVG text, where Skia turns conics into quadratics, as before. */
+  static _from_pk(a) {
+    const cmds = a.toCmds();
+    if (cmds.some((c) => c[0] === PK.CONIC_VERB)) return Path.parse(a.toSVGString());
+    const p = new Path();
+    let x = 0, y = 0;
+    for (const c of cmds) {
+      const v = c[0];
+      if (v === PK.MOVE_VERB) { p.moveTo([c[1], c[2]]); x = c[1]; y = c[2]; }
+      else if (v === PK.LINE_VERB) { p.lineTo([c[1], c[2]]); x = c[1]; y = c[2]; }
+      else if (v === PK.CUBIC_VERB) { p.curveTo([c[1], c[2]], [c[3], c[4]], [c[5], c[6]]); x = c[5]; y = c[6]; }
+      else if (v === PK.QUAD_VERB) { p.curveTo([x + 2 / 3 * (c[1] - x), y + 2 / 3 * (c[2] - y)], [c[3] + 2 / 3 * (c[1] - c[3]), c[4] + 2 / 3 * (c[2] - c[4])], [c[3], c[4]]); x = c[3]; y = c[4]; }      // a quadratic, as a cubic (as parse does)
+      else if (v === PK.CLOSE_VERB) p.closePath();
+    }
+    return p;
+  }
   _combined(other, op) {
     if (empty(other)) return this.copy();
     if (empty(this)) return op === "UNION" ? other.copy() : new Path();
-    const a = PK.FromSVGString(this.svg(6)), b = PK.FromSVGString(other.svg(6));
+    const a = this._pk(), b = other._pk();
     a.op(b, PK.PathOp[op]);
-    const out = Path.parse(a.toSVGString())._wound();
+    const out = Path._from_pk(a)._wound();
     a.delete(); b.delete();
     return out;
   }
@@ -740,18 +872,18 @@ export class Path {
   difference(other) { return this._combined(other, "DIFFERENCE"); }
   removeOverlap() {
     if (empty(this)) return this;
-    const a = PK.FromSVGString(this.svg(6));
+    const a = this._pk();
     a.simplify();
-    this.d = Path.parse(a.toSVGString())._wound().d;
+    this.d = Path._from_pk(a)._wound().d;
     a.delete();
     return this;
   }
   /** the outline of a line of this width drawn along the path, round joins and ends. */
   expandStroke(width) {
-    const a = PK.FromSVGString(this.svg(6));
+    const a = this._pk();
     a.stroke({ width, join: PK.StrokeJoin.ROUND, cap: PK.StrokeCap.ROUND });
     a.simplify();
-    const out = Path.parse(a.toSVGString())._wound();
+    const out = Path._from_pk(a)._wound();
     a.delete();
     return out;
   }
@@ -954,8 +1086,9 @@ function shaped(txt, t, size) {
     if (lang !== "default") buffer.setLanguage(lang);
     HB.shape(info.font, buffer, Object.entries(t.features || {}).map(([tag, on]) => new HB.Feature(tag, on ? 1 : 0)));
     let x = 0;
-    const p = new Path();
+    const p = new Path(), starts = [];      // where each glyph starts along the line, with the text index (UTF-16) it came from: a word's letters placed one by one (path_letters) keep their kerning
     for (const g of buffer.getGlyphInfosAndPositions()) {
+      starts.push([g.cluster, x]);
       const outline = new Path();
       for (const c of info.font.glyphToJson(g.codepoint)) {
         const v = c.values;
@@ -971,12 +1104,31 @@ function shaped(txt, t, size) {
       p.appendPath(outline);
       x += (g.xAdvance || 0) * k + tr;
     }
-    return { path: p, width: x };
+    return { path: p, width: x, starts };
   });
+}
+
+/** where each letter of a word starts and how wide it is, from the whole word shaped once (kerning and tracking in):
+ *  per code point [start, width], or null for a letter folded into the one before it (a ligature). */
+function letter_places(txt, t, size) {
+  const { starts, width } = shaped(txt, t, size), tr = t.tracking / 1000 * size, out = [];
+  const at = new Map(starts.map(([cl, x]) => [cl, x]));      // the first glyph of a cluster is the one that stands at it
+  for (const [i, x] of starts) if (!at.has(i) || at.get(i) > x) at.set(i, x);
+  const letters = [...txt];
+  let unit = 0;
+  const xs = letters.map((ch) => { const x = at.has(unit) ? at.get(unit) : null; unit += ch.length; return x; });
+  for (let i = 0; i < letters.length; i++) {
+    if (xs[i] === null) { out.push(null); continue; }
+    let next = width; for (let j = i + 1; j < letters.length; j++) if (xs[j] !== null) { next = xs[j]; break; }
+    out.push([xs[i], Math.max(next - xs[i] - tr, 0)]);
+  }
+  return out;
 }
 
 /** text → outlines. */
 export const text_path = (txt, t, size) => shaped(txt, t, size).path.copy();
+/** the type the tool sets its own words in, on a sheet (#18): the face that ships with the page (Inter). */
+export const page_type = () => ({ family: "Inter", ps: fallback_ps, tracking: 0, lang: 0, axes: {}, features: {} });
 
 /** typeset width, kerning and tracking included. */
 export const advance = (txt, t, size) => (txt ? shaped(txt, t, size).width : 0);
@@ -1090,18 +1242,17 @@ export function ring_labels(ring) {
 /** a word on the circle, letter by letter: [letter, clock angle, flipped?, offset].
  *  Real kerning and tracking; one baseline for all letters; the bottom half flips to read left → right. */
 function path_letters(txt, r, a, t, size) {
+  r = Math.max(r, 1e-3);                           // at a radius of 0 the letters' angles would be NaN (c / r), and NaN reaches the file (found 25 Oct 2026); a hair of a radius keeps every number real
   const flip = ((a % 360) + 360) % 360 > 90 && ((a % 360) + 360) % 360 < 270;
   const tr = t.tracking / 1000 * size;
-  const letters = [...txt];
-  const adv = letters.map((_, i) => advance(letters.slice(0, i).join(""), t, size));   // where each letter starts
-  adv.push(advance(txt, t, size));
-  const total = adv[adv.length - 1] - tr;
+  const letters = [...txt], places = letter_places(txt, t, size);      // the word shaped once: every letter where the kerning puts it (#542a; before, each was placed by the width of the word before it, kerning lost)
+  const total = advance(txt, t, size) - tr;
   const dy = numeral_dy(t, txt, size);
   const out = [];
   letters.forEach((ch, i) => {
-    if (!ch.trim()) return;
-    const own = advance(ch, t, size) - tr;
-    const c = adv[i] + own / 2 - total / 2;        // letter centre along the word
+    if (!ch.trim() || !places[i]) return;
+    const [start, own] = places[i];
+    const c = start + own / 2 - total / 2;         // letter centre along the word
     out.push([ch, flip ? a - degrees(c / r) : a + degrees(c / r), flip, [-own / 2, dy]]);
   });
   return out;
@@ -1121,11 +1272,30 @@ function on_path(txt, r, a, t, size) {
  *  on the origin, which is then put on the radius (the edges add their shift in tangent_shift). Sideways a numeral is
  *  always centred. */
 function numeral_dy(ring, txt, size) {
-  // baseline and ascender are retired (Okay, 19 Oct 2026, #418: "Remove these two from the functions as well"):
-  // their places in ANCHORS stay (R9) and a ring stored with one measures to the centre
+  // every label stands on the middle of the font's capital H (its zero where it has no H), so a 1, a 10 and
+  // old-style figures share one line: the middle of the ring's band (#488)
+  const h = cap_box(ring, size);
+  if (h) return -(h[1] + h[3]) / 2;
   const b = text_path(txt, ring, size).bounds();
   return b ? -(b[1] + b[3]) / 2 : 0;
 }
+
+/** the font's capital H at this size (its zero where it has no H): [x0, y0, x1, y1], baseline at 0 */
+function cap_box(ring, size) {
+  return text_path("H", { ...ring, features: {} }, size).bounds() || text_path("0", ring, size).bounds();
+}
+
+/** a numerals or text ring's band (#488; Okay, 20 Oct 2026: "ring size is determined by cap middle layout. This is
+ *  our fixed ring thickness for type"): one cap height thick, at the ring's size. Its radius is the circle that holds
+ *  still — the outer, the middle or the inner one ("Resize Ring from", as a ticks ring's ends) — and the band grows
+ *  away from it as the size grows. → [inner, outer] in mm from the centre. */
+export function text_band(ring) {
+  const h = cap_box(ring, ring.size), cap = h ? h[3] - h[1] : ring.size * 0.7;
+  const mid = ring.r + band_side(ring) * cap / 2;
+  return [max(mid - cap / 2, 0), mid + cap / 2];
+}
+/** −1 the outer circle holds still (the band lies inside it), +1 the inner, 0 the middle */
+const band_side = (ring) => ({ "outer edge": -1, "inner edge": 1 })[ANCHORS[ring.anchor]] || 0;
 
 /** the radius that keeps the drawing still when what it measures to changes (#326; Okay, 18 Oct 2026: "Nothing changed …
  *  just the dotted line moves", and "My comment applies to reverse auto reverse"): marks and bands keep their outer edge
@@ -1144,7 +1314,7 @@ export function radius_kept(ring, key, to) {
     const R = { ...ring, anchor }, b = text_path(label, R, size).bounds();
     const up = b ? numeral_dy(R, label, size) + (b[1] + b[3]) / 2 : 0;      // how far the middle stands above the radius, in the numeral's own up
     const out = mode === "upright" ? up * cos(a * PI / 180) : mode === "on path" ? 0 : up * (mode === "radial, auto-flip" && a % 360 > 90 && a % 360 < 270 ? -1 : 1);
-    return ring.r + out + (mode === "on path" ? 0 : tangent_shift(R, mode, a, label, size));
+    return ring.r + out + (mode === "on path" ? band_side(R) * (text_band(R)[1] - text_band(R)[0]) / 2 : tangent_shift(R, mode, a, label));
   };
   return max(ring.r + middle(ring.anchor || 0) - middle(to), 0);
 }
@@ -1155,22 +1325,26 @@ function numeral_setup(ring, i, a) {
   return [MODES[ring.mode], ring.r + (n.dr || 0), a + (n.da || 0), ring.size * (n.s ?? 1), n.rot || 0];
 }
 
-/** how far a numeral's middle stands from the radius when the ring is tangent (#338): its ink's reach toward the dial's
- *  edge — the box's corner in that direction for an upright numeral, half its height for one turned with the ring.
- *  → 0 for the other anchors. Outer edge: inward (−), inner edge: outward (+). */
-function tangent_shift(ring, mode, a, label, size) {
-  const anchor = ANCHORS[ring.anchor];
-  if (anchor !== "outer edge" && anchor !== "inner edge") return 0;
-  const b = text_path(label, ring, size).bounds();
-  if (!b) return 0;
-  const w = b[2] - b[0], h = b[3] - b[1], t = a * PI / 180;
-  const reach = mode === "upright" ? abs(sin(t)) * w / 2 + abs(cos(t)) * h / 2 : h / 2;
-  return anchor === "outer edge" ? -reach : reach;
+/** how far a numeral's middle stands from the radius when the outer or inner circle of the band holds still (#488):
+ *  half the cap height for a numeral turned with the ring; for an upright one, its reach toward the dial's edge — half
+ *  its width at 3 and 9, half the cap height at 12 and 6. Measured at the ring's size, so a numeral nudged bigger keeps
+ *  its place (Okay, 21 Oct 2026: the 12 "sits at the default position"). → 0 for the middle. Outer: inward (−). */
+function tangent_shift(ring, mode, a, label) {
+  const side = band_side(ring);
+  if (!side) return 0;
+  const h = cap_box(ring, ring.size), b = text_path(label, ring, ring.size).bounds();
+  if (!h || !b) return 0;
+  const half = (h[3] - h[1]) / 2, t = a * PI / 180;
+  const reach = mode === "upright" ? abs(sin(t)) * (b[2] - b[0]) / 2 + abs(cos(t)) * half : half;
+  return side * reach;
 }
 
-function numeral_at(ring, i, a0, label) {
+/** the type one numeral draws with: its own font when Edit one numeral gave it one (#513), the ring's otherwise */
+const own_type = (ring, i) => { const n = (ring.nudge && ring.nudge[String(i)]) || {}; return n.ps ? { ...ring, family: n.family, ps: n.ps, axes: n.axes || {} } : ring; };
+function numeral_at(ring0, i, a0, label) {
+  const ring = own_type(ring0, i);
   const [mode, r0, a, size, rot] = numeral_setup(ring, i, a0);
-  const r = mode === "on path" ? r0 : r0 + tangent_shift(ring, mode, a, label, size);
+  const r = mode === "on path" ? r0 + band_side(ring) * (text_band(ring)[1] - text_band(ring)[0]) / 2 : r0 + tangent_shift(ring, mode, a, label);
   if (mode === "on path") {
     const p = on_path(label, r, a, ring, size);
     if (rot) p.rotate(-rot, clock_point(r, a));
@@ -1202,7 +1376,9 @@ function text_centre(txt, t, size) {
 }
 
 function numeral_live(ring, i, a0, label) {
-  const [mode, r, a, size, rot] = numeral_setup(ring, i, a0);
+  const [mode, r0, a, size, rot] = numeral_setup(ring, i, a0);
+  // the same radius as the outlines (numeral_at): the band's circle that holds still, and the label's reach from it (#488)
+  const r = mode === "on path" ? r0 + band_side(ring) * (text_band(ring)[1] - text_band(ring)[0]) / 2 : r0 + tangent_shift(ring, mode, a, label);
   const base = { t: ring, size, fill: ring.c };
   if (mode === "on path") {
     return path_letters(label, r, a, ring, size).map(([ch, angle, flip, pos]) => ({
@@ -1298,7 +1474,9 @@ export const window_place = (w) => {
 function build_rings(S, cut = null) {
   const holes = windows_of(S).filter((w) => w.on).map(window_angle), done = [];
   for (const ring of S.rings) {
-    if (!ring.on) continue;
+    // a hidden ring is left out, unless hidden rings still cut (#221, Export › Print): then it skips and knocks out
+    // the rings under it as if it were there, and is not drawn (a ghost) — so a film made by hiding rings keeps its holes
+    if (!ring.on && !S.out_hidden_cut) continue;
     const kind = kind_of(ring), angles = ring_angles(ring);
     let keep = angles.map((_, i) => i).filter((i) => picked(ring, i));
     if (kind === "markers" || kind === "numerals" || kind === "text") keep = keep.filter((i) => !holes.some((a) => near(angles[i], a)));
@@ -1318,10 +1496,10 @@ function build_rings(S, cut = null) {
       return out;
     };
     const key = "final" + key_of(ring) + JSON.stringify([keep, sources.map((d) => [key_of(d.ring), d.keep]), cut ? date_key(S) : null]);
-    const d = { ring, kind, keep, taken, shape, at, parts, path: memo(key, final) };
+    const d = { ring, kind, keep, taken, shape, at, parts, path: memo(key, final), ghost: !ring.on };
     // a band whose sectors have colours of their own is drawn as one shape per colour: the sectors of that
     // colour, cut like the whole ring. Which sectors go together is remembered, not which colour they have.
-    if (kind === "band" && at.some((i) => ring.cs && ring.cs[String(i)])) {
+    if ((kind === "band" || kind === "numerals" || kind === "text") && at.some((i) => ring.cs && ring.cs[String(i)])) {      // a numeral's own colour too (#513): the same split
       const groups = new Map();
       at.forEach((i, j) => { const c = JSON.stringify(sector_colour(ring, i)); groups.set(c, [...(groups.get(c) || []), j]); });
       d.tints = [...groups.values()].map((js) => ({
@@ -1331,7 +1509,7 @@ function build_rings(S, cut = null) {
     }
     done.push(d);
   }
-  return done;
+  return done.filter((d) => !d.ghost);
 }
 
 // ── windows: date · day · am–pm · moon phase ─────────────────
@@ -1366,15 +1544,15 @@ export const window_turn = (w) => (w.turn && window_shape(w) !== "arc" ? ((windo
 
 /** the moon window, from its width alone: an arch over two humps. The moon, a disc as big as a hump,
  *  rises from behind the left hump (new), stands clear in the middle (full) and sets behind the right one.
- *  → {opening (the arch), moon, stars}: the night sky is a hole minus moon and stars. */
+ *  → {opening (the arch), moon}: the night sky is the hole minus the moon — the moon alone, no stars (Okay, 20 Oct
+ *  2026, 01:33: "for all moon face illustrations. please remove the stars. all now include the moon only, exclusively") */
 function moon_parts(w, age) {
   const m = w / 4, base = -0.36 * w;               // hump and moon radius · the bottom edge
   const arch = circle(2 * 0.5336 * w).translate(0, base + 0.1864 * w).intersection(new Path().rect(-w, base, 2 * w, 2 * w));
   const opening = arch.difference(circle(2 * m).translate(-m, base)).difference(circle(2 * m).translate(m, base));
   const f = (((age % 29.53) + 29.53) % 29.53) / 29.53;           // 0 new · 0.5 full · 1 new again
   const moon = circle(2 * m).translate(-m * cos(PI * f), base - 0.3 * m + (Math.sqrt(3) + 0.3) * m * sin(PI * f));
-  const stars = merge([[-0.3, 0.5], [0.33, 0.42], [0.08, 0.63]].map(([x, y]) => circle(0.07 * w).translate(x * w, base + y * w)));
-  return { opening, moon, stars };
+  return { opening, moon };
 }
 
 /** the moon as it is lit at an age (days), a disc of radius rm round the origin: {disc, lit, dark}. Waxing the right
@@ -1414,7 +1592,7 @@ function disc_places(S, w) {
   const kind = WINDOW_KINDS[w.kind], shape = window_shape(w), high = text_room(w);
   const lang = MOMENT_LANGS[w.names] || "en";
   const list = kind === "date" ? Array.from({ length: 31 }, (_, i) => String(i + 1))
-    : (MOMENT_NAMES[w.follows ? lang : (MOMENT_LANGS.find((l) => MOMENT_NAMES[l].days.includes(w.text)) || "en")]).days;
+    : w.follows ? day_list(lang, w.day_form, w.own_names) : MOMENT_NAMES[MOMENT_LANGS.find((l) => MOMENT_NAMES[l].days.includes(w.text)) || "en"].days;
   const now = Math.max(list.indexOf(kind === "date" ? String(parseInt(w.text, 10)) : String(w.text)), 0), n = list.length;      // "07" is the 7th
   const type = window_type(S, w), size = high * w.size / 100, centre = clock_point(w.r, window_angle(w)), turn = window_turn(w), a = window_angle(w);
   const at = (p) => {
@@ -1425,7 +1603,7 @@ function disc_places(S, w) {
   return { list, now, n, at, key: JSON.stringify([kind, list, now, w.r, w.at, w.at_deg, w.turn, w.text_turn, shape, size, type]) };
 }
 /** a picture's colours not set by the person (4.73): the moon's shade (light, dawn and dusk belonged to the am · pm pictures retired in 4.88; kept, R9). */
-export const PICTURE_TONES = { near: [0.62, 0.62, 0.6, 1], shade: [0.5, 0.5, 0.52, 1], light: [0.95, 0.86, 0.6, 1], dawn: [0.91, 0.65, 0.71, 1], dusk: [0.91, 0.59, 0.35, 1] };
+export const PICTURE_TONES = { shade: [0.5, 0.5, 0.52, 1], light: [0.95, 0.86, 0.6, 1], dawn: [0.91, 0.65, 0.71, 1], dusk: [0.91, 0.59, 0.35, 1] };
 
 /** a window's hole, in its own space (centre at the origin, upright), and the same hole grown by d all round.
  *  rectangle: width × height, corners rounded · circle: Ø = width · polygon: sides, inscribed in Ø = width, a flat
@@ -1470,13 +1648,22 @@ function window_hole(w) {
 /** the hour of the day the time shown is in, 0 to 24, in steps of six minutes: what an am · pm window shows, and
  *  when it has to be drawn again (the disc turns 1.5° in six minutes). */
 export const day_hour = (S) => Math.floor((((S.t % 86400) + 86400) % 86400) / 360) / 10;
+/** …and the hour a window's disc stands at: the day's hour, or with Jump (#401) the middle of its half — at noon the
+ *  am half fills the hole all morning, at midnight the pm half all afternoon and evening (half_disc's turning). */
+export const disc_hour = (S, w) => (w.jump ? (day_hour(S) < 12 ? 12 : 0) : day_hour(S));
 export const shows_day = (S) => windows_of(S).some((w) => w.on && WINDOW_KINDS[w.kind] === "am · pm");
 
 /** the day the dial shows: the bar's date, or today where it is opened (S.date "", 4.62). */
+/** a day window's short names in its Names language (EN · TR · DE · FR · IT): what a Custom day left blank shows */
+export const day_short = (names) => MOMENT_NAMES[MOMENT_LANGS[names] || "en"].days;
+
+let TODAY = null;                                  // the calendar day "now", as the window tells it (set_today); the geometry never reads the clock itself (R6)
+/** the window says what day it is (once at its start, then as time passes): a dial that follows the date shows it */
+export function set_today(day) { const was = TODAY; TODAY = day; return was !== day; }
+export const day_text = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 export function shown_day(S) {
-  if (S.date) return S.date;
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(S.date || "")) return S.date;      // a day as the bar writes it; anything else (a link can carry any text) is today, never NaN into the moment
+  return TODAY || "2026-01-01";                    // with no day told (a test without a window): one fixed day, so the same settings always draw the same
 }
 
 /** a window as it shows now: one that follows the date (4.62) says the moment's date or weekday, and a moon window its
@@ -1484,7 +1671,8 @@ export function shown_day(S) {
 export function shown_window(S, w) {
   if (!w.follows) return w;
   const kind = WINDOW_KINDS[w.kind], mo = moment(shown_day(S), S.t);
-  if (kind === "date" || kind === "day" || kind === "big date") return { ...w, text: window_text(kind === "big date" ? "date" : kind, mo, MOMENT_LANGS[w.names] || "en") };
+  if (kind === "date" || kind === "day" || kind === "big date") return { ...w, text: window_text(kind === "big date" ? "date" : kind, mo, MOMENT_LANGS[w.names] || "en", w.day_form, w.own_names) };
+  if (kind === "am · pm" && w.ampm_form) return { ...w, text: window_text(kind, mo, "en", 0, w.own_names) };      // its words jump at noon and midnight (#516)
   if (kind === "moon phase") return { ...w, age: +mo.moon.toFixed(1) };
   return w;
 }
@@ -1500,19 +1688,17 @@ function build_window(S, w, index) {
   let more = [];                                   // a picture's further colours: [{path, key, or}] (4.73)
   if (kind === "moon phase" && w.look === 1) {      // Phase: the sky in the picture's colour, the lit moon the disc's, its dark side the shade
     const rm = 0.36 * high, { disc, dark } = moon_lit(rm, w.age);
-    const stars = merge([[-0.3, 0.3], [0.31, -0.3]].map(([x, y]) => circle(0.06 * high).translate(x * high, y * high)));
-    content = opening.copy().difference(disc).difference(stars);
+    content = opening.copy().difference(disc);
     more = [{ path: dark, key: "c2", or: PICTURE_TONES.shade }];
-  } else if (kind === "moon phase" && w.look === 2) {      // Line: one ink — the moon's outline, its dark side filled, two small stars
+  } else if (kind === "moon phase" && w.look === 2) {      // Line: one ink — the moon's outline, its dark side filled
     const rm = 0.36 * high, t = Math.max(0.05 * high, 0.06), { dark } = moon_lit(rm, w.age);
     const ring = circle(2 * rm).difference(circle(2 * (rm - t)));
-    const star = (x, y, s) => new Path().rect(x - s, y - t / 2, 2 * s, t).union(new Path().rect(x - t / 2, y - s, t, 2 * s));
-    content = merge([ring, dark, star(-0.3 * high, 0.31 * high, 0.07 * high), star(0.31 * high, -0.31 * high, 0.055 * high)]).intersection(opening);
+    content = merge([ring, dark]).intersection(opening);
   } else if (kind === "moon phase") {
-    const { moon, stars } = moon_parts(w.w, w.age);
-    content = opening.copy().difference(moon).difference(stars);
-  } else if (kind === "am · pm") {                 // the disc under the half-round hole, turning on its flat side once a day: pm in the picture's colour, am the disc's
-    content = half_disc(w.w, day_hour(S)).night.intersection(opening);
+    const { moon } = moon_parts(w.w, w.age);
+    content = opening.copy().difference(moon);
+  } else if (kind === "am · pm" && !w.ampm_form) {                 // the disc under the half-round hole, turning on its flat side once a day: pm in the picture's colour, am the disc's
+    content = half_disc(w.w, disc_hour(S, w)).night.intersection(opening);
   }
   else if (kind === "big date") {                 // the tens in the left hole (none before 10), the units in the right (4.74)
     const n = parseInt(w.text, 10), [tens, units] = Number.isFinite(n) ? [n >= 10 ? String(Math.floor(n / 10) % 10) : "", String(n % 10)] : [String(w.text)[0] || "", String(w.text)[1] || ""];
@@ -1523,12 +1709,12 @@ function build_window(S, w, index) {
     content = on_path(w.text, w.r, a, window_type(S, w), text_room(w) * w.size / 100).translate(...centre.map((v) => -v));
   } else content = centred(text_path(w.text, window_type(S, w), text_room(w) * w.size / 100));
   const put = (p, turned = true) => (turn && turned ? p.rotate(-turn) : p).translate(...centre);
-  const shows_text = kind === "date" || kind === "day" || kind === "big date";
+  const shows_text = kind === "date" || kind === "day" || kind === "big date" || (kind === "am · pm" && w.ampm_form);
   const win = put(opening.copy());
   more = more.map((m) => ({ ...m, path: put(m.path.intersection(opening)) }));
   if (w.neighbours && (kind === "date" || kind === "day")) {      // its disc's places either side, where the hole lets them show (4.74)
     const D = disc_places(S, w), near = merge([-2, -1, 1, 2].map((d) => D.at(D.now + d))).intersection(win);
-    if (!empty(near)) more.push({ path: near, key: "c2", or: PICTURE_TONES.near });
+    if (!empty(near)) more.push({ path: near, key: "c2", like_number: true });      // in the number's own colour unless given one (Okay, 19 Oct 2026, 23:11: "why are the rest of the numbers gray? actual color please")
   }
   return {
     w, index, window: win, number: put(content, !shows_text || w.text_turn),      // a hole's picture turns with it; its text only if asked
@@ -1553,7 +1739,6 @@ export function window_disc(S, x) {
   const w = x.w, kind = WINDOW_KINDS[w.kind], R = S.dial_d / 2, room = R - DISC_RIM;
   const centre = clock_point(w.r, window_angle(w)), turn = window_turn(w);
   const put = (p, turned = true) => (turn && turned ? p.rotate(-turn) : p).translate(...centre);
-  const shape = window_shape(w), high = shape === "rectangle" || shape === "arc" ? w.h : shape === "arch" ? w.w / 2 : w.w;      // as build_window
   if (kind === "date" || kind === "day") {
     const e = radial_extent(x.window);
     if (!e) return null;
@@ -1562,7 +1747,7 @@ export function window_disc(S, x) {
     return { band: circle(2 * outer).difference(circle(2 * inner)), print, inner, outer, centre: [0, 0], reach: outer, fits: w.physics === false || outer <= room };
   }
   if (kind === "am · pm") {                      // its disc turns on the hole's flat side
-    const { night, r } = half_disc(w.w, day_hour(S)), rho = r + DISC_PAD;
+    const { night, r } = half_disc(w.w, disc_hour(S, w)), rho = r + DISC_PAD;
     const band = put(circle(2 * rho).translate(0, -w.w / 4)), print = put(night.copy());
     const off = put(new Path().rect(-0.001, -w.w / 4 - 0.001, 0.002, 0.002)).bounds(), pv = [(off[0] + off[2]) / 2, (off[1] + off[3]) / 2];
     const reach = Math.hypot(...pv) + rho;
@@ -1591,6 +1776,50 @@ export function build_static(S) {
   const hole = d > 0 ? circle(d) : null;
   return { plate, plate_holed: hole ? plate.difference(hole) : plate, hole, hole_line: hole ? circle(d + 0.1).difference(hole) : null,
     rings: build_rings(S, cut), windows, date: windows[0] || null };
+}
+
+/** the thinnest lines a dial asks for, read from its settings (#225; the guide's reviewers, 15 Oct 2026: "the Export log
+ *  could name the thinnest line of a dial"): every shown ring's mark width (a wedge's at its base; the smallest nudged
+ *  size counted), a band's width, each shown hand's width, each shown window's frame; and every knock-out's clearance,
+ *  the narrowest gap. Numerals and text have no stroke width to read, so they are named, not measured.
+ *  → { lines: [[what, mm]] thinnest first, gaps: [[what, mm]], unmeasured: [ring names] } */
+export function thinnest(S) {
+  const lines = [], gaps = [], unmeasured = [];
+  for (const ring of S.rings) {
+    if (!ring.on) continue;
+    const kind = kind_of(ring), name = ring.name || kind;
+    if (kind === "ticks" || kind === "markers") {
+      const sizes = Object.values(ring.nudge || {}).map((n) => n.s ?? 1);
+      const k = Math.min(1, ...sizes, kind === "markers" && ring.twelve_scale < 1 ? ring.twelve_scale : 1);
+      lines.push([`${name}${SHAPES[ring.shape] === "wedge" ? " (wedge, at its base)" : ""}`, ring.w * k]);
+    } else if (kind === "band") lines.push([name, ring.width]);
+    else unmeasured.push(name);
+    if (ring.knock > 0) gaps.push([`${name}'s clearance`, ring.clear]);
+  }
+  if (S.ha_on) for (const [key, word] of [["ha_hour", "Hour hand"], ["ha_minute", "Minute hand"], ["ha_second", "Seconds hand"]]) {
+    const h = { ...HAND_BASE, ...(S[key] || {}) };
+    if (h.on) lines.push([word, h.w * (h.w_scale || 1)]);
+  }
+  windows_of(S).forEach((w, i) => { if (w.on && w.frame > 0) lines.push([`Window ${i + 1}'s frame`, w.frame]); });
+  const by = (a, b) => a[1] - b[1];
+  return { lines: lines.filter((l) => l[1] > 0).sort(by), gaps: gaps.sort(by), unmeasured };
+}
+
+/** what a mono print mask loses (#220): a ring that lies on a ring below it in another colour. On the dial the two
+ *  inks tell them apart; a mask has one ink, so the upper ring's shapes merge into the lower one and vanish. Not
+ *  lost: a ring knocked out of the one below (the lower ring is cut round it, so the mask keeps it), or two rings of
+ *  one colour (the colour export merges them too). → [{ top, under }] ring names, top first. statik: build_static's. */
+export function mask_merges(statik) {
+  const out = [], rings = statik.rings, colour = (d) => JSON.stringify([d.ring.c, d.ring.cs || null]);
+  rings.forEach((top, i) => {
+    if (empty(top.path)) return;
+    for (const under of rings.slice(i + 1)) {
+      if (empty(under.path) || colour(top) === colour(under)) continue;
+      const both = top.path.intersection(under.path), b = both && both.bounds();
+      if (b && (b[2] - b[0]) * (b[3] - b[1]) > 1e-4) out.push({ top: top.ring.name, under: under.ring.name });      // more than a sliver where two edges touch
+    }
+  });
+  return out;
 }
 
 // ── hands ────────────────────────────────────────────────────
@@ -1698,23 +1927,121 @@ function hand_items(S, t) {
  *  · angle (clock angle for hands, else 0). Rings add ring (their entry in static.rings) and
  *  index (their place in S.rings); hands add name; guides add stroke and px (screen points).
  *  selected = index of the ring being edited; its guides are drawn stronger. */
+/** a colour as the inks are named (#35): #RRGGBB, its alpha left out. */
+export const ink_hex = (c) => "#" + c.slice(0, 3).map((v) => Math.round(Math.min(Math.max(v, 0), 1) * 255).toString(16).padStart(2, "0")).join("").toUpperCase();
+
+// ── inks (show mode's Inks pane, #545) ───────────────────────
+//   What a printer sees: every colour printed on the dial is one ink, the same colour exactly (two near-blacks are two
+//   inks: Okay, 25 Oct 2026, "Exact match only"), and an ink stands INK_MM proud of the plate unless given its own
+//   height. An ink can be split in two of the same colour, A and B, each its own height (a thick red and a thin one:
+//   "One thick red one thin possible via a switch on the pane"); a part says which by its ink_b / frame_b. What is printed
+//   on a disc (figures, a moon, its shade) is on another part of the watch, so it is never one of the dial's inks: each
+//   window's disc prints have their own height (print_h). The disc itself is their baseline ("no need for ink height
+//   there, that's the baseline"). All inks at once (w_ink_all) adds the same mm to every printed height.
+export const INK_MM = 0.21, INK_STEP_MM = 0.035, INK_START = 6, INK_MOST = 0.5;      // 0.21 = the 6 steps of 0.035 mm an ink stood at; the most a height can be
+/** one ink's settings, with what is not set filled in */
+export const ink_of = (S, hex) => { const e = (S.w_inks || {})[hex] || {}; const h = e.h ?? INK_MM; return { h, two: Boolean(e.two), b: e.b ?? h }; };
+/** the dial's inks, in the order the Colours pane lists their parts (rings top first, then the windows' frames):
+ *  [{ hex, colour, parts: [{ kind: "ring" | "frame", i, name, sectors }] }] — a band's sectors of one colour are one
+ *  part of that ink, so a band of two colours is a part of two inks */
+export function dial_inks(S) {
+  const inks = new Map(), put = (c, part) => { if (!Array.isArray(c)) return; const hex = ink_hex(c); if (!inks.has(hex)) inks.set(hex, { hex, colour: c, parts: [] }); const ink = inks.get(hex), same = ink.parts.find((p) => p.kind === part.kind && p.i === part.i); if (same) same.sectors += 1; else ink.parts.push(part); };
+  S.rings.forEach((r, i) => {
+    const name = r.name || kind_of(r);
+    if (kind_of(r) === "band" && positions_of(r).length > 1) for (const at of positions_of(r)) put(sector_colour(r, at), { kind: "ring", i, name, sectors: 1 });
+    else put(r.c, { kind: "ring", i, name, sectors: 0 });
+  });
+  windows_of(S).forEach((w, i) => { if (w.on) put(w.ink, { kind: "frame", i, name: window_name(w) + " frame", sectors: 0 }); });
+  return [...inks.values()];
+}
+/** a window's name in the lists: its kind and where it is ("Date at 3", "Moon phase at 6") */
+export const window_name = (w) => { const k = WINDOW_KINDS[w.kind] || "window"; return k[0].toUpperCase() + k.slice(1) + " at " + (w.at_deg != null ? Math.round(w.at_deg) + "°" : (DATE_AT[w.at] || DATE_AT[0])[0]); };
+/** how high a printed item of the scene stands, mm: its ink's height (A, or B when the ink is split and the part on B),
+ *  or its disc's prints' height; with All inks at once added; never below the plate */
+export function ink_mm(S, x) {
+  let h = INK_MM;
+  if (x.role === "ring" || x.role === "date frame") {
+    const ink = ink_of(S, ink_hex(x.fill)), on_b = x.role === "ring" ? x.ring?.ring?.ink_b : windows_of(S)[x.window]?.frame_b;
+    h = ink.two && on_b ? ink.b : ink.h;
+  } else if (x.role === "date number" || x.role === "date picture" || x.role === "disc print") h = windows_of(S)[x.window]?.print_h ?? INK_MM;
+  return Math.max(0, Math.min(INK_MOST, h + (+S.w_ink_all || 0)));
+}
+/** the inks a dial is printed in (#35): every shown ring's colour (each sector's of a band), every shown window's frame;
+ *  in the order they lie, top first. → [#RRGGBB] */
+export function inks_of(S) {
+  const out = [];
+  for (const ring of S.rings) {
+    if (!ring.on) continue;
+    out.push(ink_hex(ring.c));
+    if (KINDS[ring.kind] === "band" || has_text(ring)) for (const c of Object.values(ring.cs || {})) out.push(ink_hex(c));      // a sector's or one numeral's own colour (#513) is an ink too: it gets its film (found 25 Oct 2026)
+  }
+  for (const w of windows_of(S)) if (w.on) out.push(ink_hex(w.ink || INK));
+  return [...new Set(out)];
+}
+
+/** a mask's production marks (#224; the guide's reviewers, 15 Oct 2026: "no blank outline or registration marks"): the
+ *  blank's outline, a 0.1 mm ring just outside the dial's edge, so the film is laid on the blank by it; and a
+ *  registration mark in each corner of the page — a ring with a cross through it, 4 mm across — so two films (one per
+ *  ink, #35) are laid on each other by them. The corners lie outside the dial's circle, so they hold a mark even on a
+ *  page with no margin; a mark that would come closer than 1 mm to the dial is made smaller, and none is drawn under
+ *  1.5 mm (production_marks_fit says so). Filled shapes (R4). → [[role, path]] */
+export const REG_MARK = 4, REG_LINE = 0.1;
+export function production_marks(S) {
+  const H = page_mm(S) / 2, out = [["outline", circle(S.dial_d + 2 * REG_LINE).difference(circle(S.dial_d))]];
+  const m = production_mark_size(S);
+  if (!m) return out;
+  const at = H - m / 2 - 0.5;                      // the mark's centre: half a millimetre in from the page's corner
+  for (const [sx, sy] of [[-1, 1], [1, 1], [1, -1], [-1, -1]]) {
+    const ring = circle(m * 0.6).difference(circle(m * 0.6 - 2 * REG_LINE));
+    const cross = new Path().rect(-m / 2, -REG_LINE / 2, m, REG_LINE).union(new Path().rect(-REG_LINE / 2, -m / 2, REG_LINE, m));
+    out.push(["registration", ring.union(cross).translate(sx * at, sy * at)]);
+  }
+  return out;
+}
+/** how big the registration marks can be on this page (mm), or 0 if a corner can't hold one 1.5 mm across. */
+export function production_mark_size(S) {
+  const R = S.dial_d / 2, H = page_mm(S) / 2;
+  // a mark m across, centred at (c, c) with c = H - m/2 - 0.5, stands c·√2 from the dial's centre; the disc round it
+  // (radius m/√2, its cross's ends) must keep 1 mm off the dial's edge
+  const fits = (m) => (H - m / 2 - 0.5) * Math.SQRT2 - m / Math.SQRT2 >= R + 1;
+  for (let m = REG_MARK; m >= 1.5; m -= 0.25) if (fits(m)) return m;
+  return 0;
+}
+
 export function scene(S, statik, t, preview = true, selected = null) {
   const items = [];
   const add = (role, path, fill, more = {}) => {
     if (path) items.push({ role, path, fill, angle: 0, ...more });
   };
   const windows = statik.windows;
+  // a window's colours come from the settings as they are now, not the still parts' copy: a colour changed doesn't
+  // rebuild them (app.js set_value), so the copy can be a step behind (Okay, 20 Oct 2026, 01:33: "moon face colors
+  // selector does not work … changing radius refreshes and fixes color issue")
+  const set_now = windows_of(S), now_w = new Map();
+  const wc = (x) => { if (!now_w.has(x.index)) now_w.set(x.index, set_now[x.index] ? shown_window(S, set_now[x.index]) : x.w); return now_w.get(x.index); };
   const rings = statik.rings.slice().reverse();    // bottom ring first, top ring last
   const index = (d) => S.rings.indexOf(d.ring);
 
   if (S.out_production) {                          // mono mask, no plate, no hands
-    const black = [0, 0, 0, 1];
-    for (const d of rings) add("ring", d.path, black, { ring: d, index: index(d) });
-    for (const x of windows) {
-      add("date frame", x.frame, black, { window: x.index });
-      add("cutline", x.cutline, black, { window: x.index });
+    const black = [0, 0, 0, 1], cuts = S.out_cutlines !== false;      // #222: the cut lines only while asked for (they are on to start)
+    // one ink only (#35, a film per ink for pad printing): the rings, sectors and frames of that colour; the cut lines and
+    // marks on every film, since they are what the films are laid by
+    const ink = S.out_ink || "", of = (c) => !ink || ink_hex(c) === ink;
+    for (const d of rings) {
+      if (!ink || !d.tints) { if (of(d.ring.c) || (d.tints && !ink)) add("ring", d.path, black, { ring: d, index: index(d) }); }
+      else d.tints.forEach((tint, n) => { if (of(sector_colour(d.ring, tint.at))) add("ring", tint.path, black, { ring: d, index: index(d), part: n + 1 }); });
     }
-    if (statik.hole_line) add("hole", statik.hole_line, black);
+    for (const x of windows) {
+      if (of(wc(x).ink)) add("date frame", x.frame, black, { window: x.index });
+      if (cuts) add("cutline", x.cutline, black, { window: x.index });
+    }
+    if (statik.hole_line && cuts) add("hole", statik.hole_line, black);
+    if (S.out_invert) {                            // #223: toner on the blank everywhere but the marks — the dial's disc less all of the above, one shape
+      const marks = merge(items.map((i) => i.path));
+      items.length = 0;
+      add("inverted", empty(marks) ? circle(S.dial_d) : circle(S.dial_d).difference(marks.removeOverlap()), black);
+    }
+    if (S.out_marks) for (const [role, path] of production_marks(S)) add(role, path, black);      // #224: the blank's outline, registration marks in the corners
   } else {
     // X-ray (4.72, #346; rewritten 4.88 — Okay, 19 Oct 2026: "Xray makes the unseen full visible, sensible z height
     // differences (not editable) and a stacking order. Selected shows above all others. Top is 100% opacity, with a
@@ -1724,25 +2051,25 @@ export function scene(S, statik, t, preview = true, selected = null) {
     const discs = preview && S.xray ? windows.map((x) => ({ x, d: window_disc(S, x) })).filter((v) => v.d) : [];
     const xray = discs.length > 0, chosen = xray ? discs.find((v) => v.x.index === (S.ui_window ?? 0)) || null : null;
     const under = discs.filter((v) => v !== chosen).sort((p, q) => q.d.outer - p.d.outer);      // the biggest first: the deepest
-    const layers = (chosen ? 1 : 0) + 1 + 1 + under.length;      // the selected disc · the hands · the face · each other disc
     const dim = (fill, layer) => (xray && fill ? [...fill.slice(0, 3), fill[3] * Math.max(1 - 0.15 * layer, 0.25)] : fill);      // layer 0 at the top
     const face = chosen ? 2 : 1, hands_layer = chosen ? 1 : 0;
     under.forEach(({ x, d }, i) => {
       const layer = face + 1 + (under.length - 1 - i);
-      add("disc", d.band, dim(x.w.disc_c || [1, 1, 1, 1], layer), { window: x.index });
-      add("disc print", d.print, dim(x.w.text_c || x.w.ink, layer), { window: x.index });
+      add("disc", d.band, dim(wc(x).disc_c || [1, 1, 1, 1], layer), { window: x.index });
+      add("disc print", d.print, dim(wc(x).text_c || wc(x).ink, layer), { window: x.index });
     });
     for (const x of windows) {                     // what shows through each hole, on white
-      add("date disc", x.window, dim(x.w.disc_c || [1, 1, 1, 1], face), { window: x.index });
-      add("date number", x.number, dim(x.w.text_c || x.w.ink, face), { window: x.index });
-      for (const m of x.more || []) add("date picture", m.path, dim(x.w[m.key] || m.or, face), { window: x.index });      // a picture's further colours (4.73)
+      if (S.out_window_content === false) continue;      // #219: the holes alone, for a printer who prints the face
+      add("date disc", x.window, dim(wc(x).disc_c || [1, 1, 1, 1], face), { window: x.index });
+      add("date number", x.number, dim(wc(x).text_c || wc(x).ink, face), { window: x.index });
+      for (const m of x.more || []) add("date picture", m.path, dim(wc(x)[m.key] || (m.like_number ? wc(x).text_c || wc(x).ink : m.or), face), { window: x.index });      // a picture's further colours (4.73)
     }
     add("plate", S.ha_on ? statik.plate : statik.plate_holed, dim(S.c_plate, face));      // the hole shows when the hands are hidden
     for (const d of rings) {
       if (d.tints) d.tints.forEach((tint, n) => add("ring", tint.path, dim(sector_colour(d.ring, tint.at), face), { ring: d, index: index(d), part: n + 1 }));
       else add("ring", d.path, dim(d.ring.c, face), { ring: d, index: index(d) });
     }
-    for (const x of windows) add("date frame", x.frame, dim(x.w.ink, face), { window: x.index });
+    for (const x of windows) add("date frame", x.frame, dim(wc(x).ink, face), { window: x.index });
     if (S.ha_on) {
       for (const [name, colour, path, a, h] of hand_items(S, t)) {
         add("hand", path, dim(colour, hands_layer), { name, angle: a });
@@ -1752,8 +2079,8 @@ export function scene(S, statik, t, preview = true, selected = null) {
     }
     if (chosen) {                                  // the selected window's disc on top, whole, with a white dotted outline
       const { x, d } = chosen;
-      add("disc", d.band, x.w.disc_c || [1, 1, 1, 1], { window: x.index });
-      add("disc print", d.print, x.w.text_c || x.w.ink, { window: x.index });
+      add("disc", d.band, wc(x).disc_c || [1, 1, 1, 1], { window: x.index });
+      add("disc print", d.print, wc(x).text_c || wc(x).ink, { window: x.index });
       add("disc edge", circle(2 * d.outer).translate(...d.centre), null, { stroke: [1, 1, 1, 1], px: 1.5, dots: true, window: x.index });
       if (d.inner > 0) add("disc edge", circle(2 * d.inner).translate(...d.centre), null, { stroke: [1, 1, 1, 1], px: 1.5, dots: true, window: x.index });
     }
@@ -1784,7 +2111,6 @@ export function scene(S, statik, t, preview = true, selected = null) {
     // reach as drawn. A window: the edges its hole reaches; which windows, as for rings (gd_wins, gd_wsel).
     // A ring's dotted line is its radius — where it is resized from (#257, 4.47: the outer end, the middle or the inner
     // end of its marks; a numeral's anchor); a window's is its middle.
-    const built = new Map(statik.rings.map((d) => [d.ring, d]));
     const edges = (k, outer, inner, px, a, at = (outer + inner) / 2) => {
       for (const r of [...new Set([outer, inner])]) if (r > 0) stroke_guide(circle(2 * r), k, px, a);
       if (outer - inner > 0.01 && at > 0) add("guide", circle(2 * at), null, { stroke: tone(k, a), px, dots: true });
@@ -1801,8 +2127,11 @@ export function scene(S, statik, t, preview = true, selected = null) {
       const kind = kind_of(ring);
       const extent = { ticks: ring.len, markers: ring.len, band: ring.width }[kind] || 0;
       let outer = ring.r + from_shift(ring, extent), inner = outer - extent;
-      if (has_text(ring)) { const e = radial_extent(built.get(ring)?.path); if (e) [inner, outer] = e; }
-      edges(k, outer, inner, focused ? S.gd_w * 1.5 : S.gd_w, faded(focused), ring.r);
+      const px = focused ? S.gd_w * 1.5 : S.gd_w, al = faded(focused);
+      if (has_text(ring)) {      // the band's three circles: the one that holds still (the radius) solid, the other two dotted (Okay, 21 Oct 2026: "selected line gets full, others dotted")
+        [inner, outer] = text_band(ring);
+        for (const r of [outer, (outer + inner) / 2, inner]) if (r > 0) add("guide", circle(2 * r), null, { stroke: tone(k, al), px, dots: abs(r - ring.r) > 1e-6 });
+      } else edges(k, outer, inner, px, al, ring.r);
     });
     for (const x of windows) {
       const focused = focus === "windows" && x.index === (S.ui_window ?? 0), chosen = focused && S.gd_wsel, k = window_guide(S, x.index), e = radial_extent(x.window);
@@ -1812,7 +2141,7 @@ export function scene(S, statik, t, preview = true, selected = null) {
       const d = window_disc(S, x);
       if (d) {
         const px = focused ? S.gd_w * 1.5 : S.gd_w, a = faded(focused);
-        for (const r of [d.inner, d.outer]) if (r > 0) add("guide", circle(2 * r).translate(...d.centre), null, { stroke: r === d.outer && !d.fits ? [...DISC_WARN, a] : tone(k, a), px, dashes: true });
+        for (const r of [d.inner, d.outer]) if (r > 0) add("guide", circle(2 * r).translate(...d.centre), null, { stroke: r === d.outer && !d.fits ? [...DISC_WARN, a] : tone(k, a), px, spaced: true });
       }
     }
     for (const g of S.gd_more || []) {              // the guides added by hand
@@ -1835,7 +2164,13 @@ export const turned = (path, angle) => path.copy().rotate(-angle);
 export const RING_MM = ["r", "len", "w", "width", "clear", "round_out", "round_in", "wall", "size", "twelve_gap"];
 export const HAND_MM = ["len", "w", "tail", "tip", "feature", "counter", "wall", "round", "disc_d", "mark_len", "mark_w", "hub"];
 export const WINDOW_MM = ["r", "w", "h", "round", "frame", "clear"];
-function each_measure(S, visit) {
+function each_measure(S, visit, keys = null) {
+  if (keys) {                                      // a chosen set: Weight's widths (#88)
+    for (const ring of S.rings) for (const key of keys.ring) visit(ring, key);
+    for (const h of HANDS) for (const key of keys.hand) visit(S["ha_" + h], key);
+    for (const w of windows_of(S)) for (const key of keys.window) visit(w, key);
+    return;
+  }
   for (const ring of S.rings) {
     for (const key of RING_MM) visit(ring, key);
     for (const at of Object.keys(ring.nudge).sort()) if (ring.nudge[at].dr) visit(ring.nudge[at], "dr");      // a numeral's own radius ±
@@ -1844,14 +2179,18 @@ function each_measure(S, visit) {
   for (const w of windows_of(S)) for (const key of WINDOW_MM) visit(w, key);
   visit(S, "ha_cap");
 }
-export function measures(S) {
+/** every width on the dial — how thick a thing is, never how long or where (#88, Weight; atlas 6.19): a mark's width
+ *  and a hollow one's wall, a band's width; a hand's width, its wall and its disc's mark; a window's frame. Numerals
+ *  have no stroke width of their own (their font's weight is theirs). */
+export const WEIGHT_KEYS = { ring: ["w", "width", "wall"], hand: ["w", "wall", "mark_w"], window: ["frame"] };
+export function measures(S, keys = null) {
   const out = [];
-  each_measure(S, (d, key) => out.push(d[key]));
+  each_measure(S, (d, key) => out.push(d[key]), keys);
   return out;
 }
-export function set_measures(S, values) {
+export function set_measures(S, values, keys = null) {
   let i = 0;
-  each_measure(S, (d, key) => { d[key] = values[i++]; });
+  each_measure(S, (d, key) => { d[key] = values[i++]; }, keys);
 }
 
 /** the page's side in mm: the dial and its margins. */

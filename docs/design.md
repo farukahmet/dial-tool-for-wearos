@@ -62,6 +62,9 @@ check §2–§6 against it.
 - **In the tool's window, two kinds of figures** (Okay, 14 Oct 2026): numbers that change in place — fields, the time,
   counters — are tabular, so they don't jitter; a label that stands still in a box of its own ("10:30", "720×", "AM")
   is proportional, so a "1" doesn't carry a "0"'s width.
+  Numbers alone in the interface are in the panel's own type, lining and tabular, with a plain zero — never slashed
+  (Okay, 20 Oct 2026, 00:20: "tabular linings on … in all interface where we use nothing but numbers, no slashed zero").
+  The mono faces are for what the tool says (log, hex, link) and the bar.
 - **A label in a box is centred on its ink** (Okay, 14 Oct 2026: "FIND THE RECTANGLE… AND CENTER THAT"): the rectangle
   its ink covers, left to right and top to bottom, stands on the box's centre — not its advance widths, not the font's
   line box. Overhangs are fine. Measured in the face actually drawn, on that screen, never typed in as a nudge
@@ -171,12 +174,27 @@ alignment to these rules as well."*
   a tick, as a tick's second line would, starting where the tick's words start; under controls, just below their
   boxes, on the controls' column. The box ends as far under the note as a row's words start above
   (`--note-air`). The CSS for it: `4c-rows.css`, *a note and the row it explains are one box*.
+- **A word on a heading's line that is not its title** (Resize Ring's *from*; a folded pane's summary) is an indicator:
+  small and grey, the summary's look (Okay, 20 Oct 2026, 01:16: "Small and gray like other indicators on the below left
+  column").
+- **A note belongs to its row**: no line between them, however many hidden rows lie between (`sync_rows` marks the row
+  *noted*); under a field it starts just below the box, under a tick at the words' start, under a row of tiles a
+  tile-gap below them (20 Oct 2026, 01:16: "why the follows.. line stuck up there? what is the actual shape it must be in?").
+- **A side row** — a name, a slider and a number box squeezed beside a box (a hand's rows beside its picture; Give
+  way's Clearance): the slider follows its name with no gap, the name's column as wide as the longest name; the gap
+  that would stand there goes to the slider and the number box, so four figures show whole (Okay, 19 Oct 2026, 23:46
+  and 23:53: "love the slider growth. this special case happens when sliders need to fit with boxes like this").
+  `--side-columns` in `1-tokens.css`. A full row (R15 form A) keeps its gaps.
+- **A choice of a few words is a pill switch** (Picture, Names, Paper, a disc hand's Marker, the font sheet's Light ·
+  Dark): a rounded outline as wide as its words, the words in it as pills, the chosen one ink (Okay, 20 Oct 2026, 01:33:
+  "Arch phase line selector exactly like this light dark selector here. exactly same style. can we make this
+  universal?"). `.pillswitch`. The dark popups too: the Guides list's foot (Thickness; Add as free pills; Okay, 25 Oct 2026, #539).
 - **A row of tile buttons** (a window's complications, a mark's shapes; Okay, 19 Oct 2026, 21:26: "Complications tabs
   are 10/10. Do not touch, rule for 4 item buttons like this from the future. 5th squeezes in, or we find another
   way"; "2 or 3 buttons on a selector like complications work the same. Same size buttons, gaps on the right"): the
   tiles stand on the controls' column, beside the row's name, four to a line and equal. Two or three keep a four's
   size, the room left at the right. A fifth squeezes in, the five equal; more than five is a sign to find another
-  way. `.picks` in `3-controls.css`; `--across` (app.js) is never less than four.
+  way. `.picks` in `3-controls.css`; `--across` (windows.js) is never less than four.
 
 ## 7 · Writing
 
@@ -203,7 +221,7 @@ Noted while drawing the window; none is built. Each needs Okay's word (R18).
 
 *Canon since 14 Oct 2026 (beta 4.36), from the icon audit Okay asked for ("Let this knowledge of good and proper icon
 making be canon. This pipeline for upcoming icons"). Binding through R33. Source: the icon block at the top of
-`web/src/app.js`; checks and tools: `web/icons/` (its `README.md` says how to use them).*
+`web/src/icons.js`; checks and tools: `web/icons/` (its `README.md` says how to use them).*
 
 Every screen the tool is used on is 2× (iPad, both Macs): a point is two screen dots, and Chrome puts each icon's
 corner on a dot even when the layout puts it on a fraction (measured, 14 Oct). So what decides sharpness is the grid
@@ -244,7 +262,7 @@ inside the drawing.
   draws 1 (measured, 14 Oct). Where a border is part of a sign, the sign draws it (`round_sign()`, the ring list's
   round tools).
 - **One drawing per idea.** One plus (9 long), one minus, one cross (8), one chevron (8 × 4), one copy sign, one
-  sheet, wherever they appear (`SIGNS` in `app.js`). Open shapes are drawn a little smaller than arrows and boxes
+  sheet, wherever they appear (`SIGNS` in `icons.js`). Open shapes are drawn a little smaller than arrows and boxes
   beside them, because they look larger. Round caps and joins on every line, as on the dial (Okay, 13 Oct).
 - **A quiet sign** may be drawn `DENSE`, with its box's corners an eighth heavier (`box(…, DENSE, DENSE + 1 / 8)`): the
   rename box (Okay, 11 Oct: "thin and light"; 14 Oct: "thinner lines"). Quiet is a choice per sign, Okay's, not a
@@ -267,3 +285,17 @@ drawing.svg 16` puts it on the grid, gives each line its width and prints the co
 block → `node icons/check.mjs` (also part of `npm test`) checks every icon in the running window against the rules
 above → `python3 icons/look.py` reads how heavy each line looks and names any that is off, and why → look at
 `icons/out/sheet.png`, then on the Mac and the iPad. The numbers propose; the eye decides.
+
+## 10 · The panel's layout
+
+How the panel's parts are laid out, in the stylesheet's terms (R32 names the tokens; `docs/sectors.md` is the index from a region on screen to its rule and its token).
+
+- **A framed thing** — a ring row, the font box — stands between the pane's lines, from the labels' line to the pane's
+  right line; inside, `--frame-pad` keeps what is in it off the frame (the eye at the left of a ring row, the steppers
+  and Change… at the right of the font box, whose sliders give up that room).
+- **A heading that carries controls on its line** (a window's places, its shapes) gives them a unit over and under, as
+  the tiles in a row get, and grows to hold them; its title keeps the place it has on every heading, the same gap over
+  it (Okay, 16 Oct 2026: "These rows are allowed height growth now… appropriate vertical padding like all the rows";
+  "top gap stays same").
+- **A number's row lays its tracks out in full** (`--num-columns`: columns, gaps, then the two tiles) rather than
+  nudging its field and stepper.

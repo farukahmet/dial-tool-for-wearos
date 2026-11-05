@@ -3,7 +3,7 @@
      btn (outline): an action · btn main (filled): writes a file · plain (words only): adds something ·
      sign (a drawing only): acts on the selected thing. Steps, segments and tiles are below. */
   button { appearance: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
-  select, input { font: inherit; color: inherit; }
+  select, input { font: inherit; font-variant-numeric: inherit; color: inherit; }      /* the figures said again: some WebKit builds leave a field's figures out of "font: inherit", so a number box can show proportional figures (Okay, 20 Oct 2026, 03:35: "MAKE ALL THESE TABULAR") */
   /* a short label in a box of its own, centred on its ink, with proportional figures (ink.js writes the two
      offsets; Okay, 14 Oct 2026: "proportional ink box it is"; design canon §2) */
   .ink { display: inline-block; font-variant-numeric: proportional-nums lining-nums; transform: translate(var(--ink-dx, 0), var(--ink-dy, 0)); }
@@ -13,17 +13,35 @@
   input[type="text"]:focus, select:focus { outline: var(--thick) solid var(--ink); outline-offset: 0; }
 
   .btn, .step, .segs > button, .plain, .sign { height: var(--control); border: var(--hair) solid var(--ink); background: var(--field); }
-  :is(.btn, .step, .segs > button):hover { background: var(--hover); }
+  @media (hover: hover) { :is(.btn, .step, .segs > button):hover { background: var(--hover); } }
   :is(.btn, .step, .segs > button, .plain, .sign):active { background: var(--ink); color: var(--paper); }
   .btn { padding: 0 var(--btn-pad); }
   .btn.main { min-width: var(--col); background: var(--ink); color: var(--paper); font-weight: 600; }
-  .btn.main:hover { background: var(--ink-hover); }
+  @media (hover: hover) { .btn.main:hover { background: var(--ink-hover); } }
   .plain, .sign { flex: none; border-color: transparent; background: none; }
   .plain { padding: 0 var(--unit); white-space: nowrap; }
   .sign { display: inline-grid; place-items: center; width: var(--control); }
-  :is(.plain, .sign):hover { background: var(--field); border-color: var(--rule); }
+  @media (hover: hover) { :is(.plain, .sign):hover { background: var(--field); border-color: var(--rule); } }
 
   .steps, .segs { display: flex; }
+  /* a choice of a few words: a pill switch — a rounded outline, the words in it as pills, the chosen one ink (5-chosen).
+     Every word choice in the panel (Picture, Names, Paper, a disc hand's Marker…) and the font sheet's Light · Dark
+     (Okay, 20 Oct 2026, 01:33: "Arch phase line selector exactly like this light dark selector here … universal") */
+  .pillswitch { display: flex; justify-self: start; width: max-content; max-width: 100%; border: var(--hair) solid var(--rule); border-radius: var(--round-pill); padding: var(--u1); background: var(--field); }
+  .pillswitch > button { height: calc(var(--control) - 2 * var(--u1) - 2 * var(--hair)); padding: 0 var(--u4); border-radius: var(--round-pill); color: var(--grey); font-size: var(--t-s); }
+  @media (hover: hover) { .pillswitch > button:hover:not(.on) { color: var(--ink); } }
+  .pillswitch.many { flex-wrap: wrap; }
+  /* a toggle (#525): a small track as tall as the Gallery pill, a dot travelling in it. Off: its outline, the dot at the
+     left in the outline's colour, its row's name dark. On: the dot white at the right, on the filled track */
+  .toggle { position: relative; flex: none; width: var(--toggle-w); height: var(--toggle-h); padding: 0; border: var(--hair) solid var(--uiblack, var(--ink)); border-radius: var(--round-pill); background: none; }      /* off: all black — its outline, its dot, its name (Okay, 24 Oct 2026, 19:40: "Off; colors all black") */
+  .toggle > .knob { position: absolute; top: 50%; left: var(--u1); width: var(--toggle-dot); height: var(--toggle-dot); border-radius: 50%; background: var(--uiblack, var(--ink)); translate: 0 -50%; transition: left var(--iris-time) var(--view-ease), background var(--iris-time); }
+  .toggle[aria-checked="true"] { background: var(--uiblack, var(--ink)); border-color: var(--uiblack, var(--ink)); }
+  .toggle[aria-checked="true"] > .knob { left: calc(100% - var(--u1) - var(--toggle-dot)); background: var(--white); }
+  /* free: each choice a pill of its own, wrapping, a half unit apart (#524; Okay, 24 Oct 2026: "Options can be free living single pills") */
+  .pillswitch.free { flex-wrap: wrap; gap: var(--u1); padding: var(--u1) 0; border: 0; background: none; }
+  .pillswitch.free > button { border: var(--hair) solid var(--rule); background: var(--field); }
+  .showing .pillswitch:not(.free) { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }      /* show mode's column is narrower: a long pill scrolls sideways on its line, so no row grows (Okay, 22 Oct 2026, 21:05: "Scroll sideways it is"; the Show Case's rule) */
+  .showing .pillswitch::-webkit-scrollbar { display: none; }
   .steps { width: 100%; }
   .step, .segs > button { flex: 1; border-color: var(--rule); }
   .segs > button { padding: 0 var(--unit); }
@@ -32,16 +50,16 @@
      each as wide as the others, a unit between them, as high as a large control; the chosen one ink (chosen layer) */
   .btnline { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--unit); }
   .btnline > button { display: grid; place-items: center; height: var(--control-large); padding: 0; border: var(--hair) solid var(--rule); background: var(--field); }
-  .btnline > button:hover { background: var(--hover); }
+  @media (hover: hover) { .btnline > button:hover { background: var(--hover); } }
   .row > .btnline { grid-column: 3 / -1; }
   /* a line of round buttons (a window's places on its heading's line, 4.46.1: "3 6 9 12 are circular buttons now";
      4.46.2: "add 4… scale up circles"): from the controls' column to the end, a unit between them as between tiles,
      each as large as its share of the line allows. A time in the dots (2:15) is set a size smaller to fit */
   .circles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--unit); }
   .circles > button { display: grid; place-items: center; aspect-ratio: 1; padding: 0; border: var(--hair) solid var(--rule); border-radius: 50%; background: var(--field); }
-  .circles > button:hover { background: var(--hover); }
+  @media (hover: hover) { .circles > button:hover { background: var(--hover); } }
   .circles > .atmore.on { font-size: var(--t-xs); }
-  .atmore:not(.on) { letter-spacing: 0.1em; }      /* the three dots, a little apart */
+  .atmore:not(.on) { letter-spacing: var(--track-100); }      /* the three dots, a little apart */
   :is(.step, .segs > button) + button { border-left: 0; }
   .tools { display: flex; flex-wrap: wrap; gap: var(--unit); align-items: center; }
 
@@ -77,7 +95,7 @@
 
   /* a choice as pictures (pickt: one column wide) and OpenType switches (tile: two columns wide); the chosen one is filled */
   .pickt, .tile { display: grid; border: var(--hair) solid var(--rule); background: var(--field); }
-  :is(.pickt, .tile):hover { background: var(--hover); }
+  @media (hover: hover) { :is(.pickt, .tile):hover { background: var(--hover); } }
   .picks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--unit); padding: var(--unit) 0; }      /* one small space, the unit: between the tiles, both ways, and from them to the row's lines. The tiles are wider than a column for it */
   .picks.across { grid-template-columns: repeat(var(--across), minmax(0, 1fr)); }      /* a line of all its tiles, however many, equal, on the controls' column beside its name as every row's controls stand (Okay, 19 Oct 2026, 20:37: a window's four complications "EQUAL", from the controls' line) */
   .pickt { justify-items: center; align-content: start; gap: var(--u1); min-height: var(--tile); padding: var(--unit) var(--hair); font-size: var(--t-xs); line-height: 1.15; }
@@ -94,10 +112,11 @@
   /* reach: under a finger, a small control is pressed from a little outside its edge too — up to half-way to its
      neighbour, so two never overlap. What you see doesn't change: the reach is an unseen frame round the control
      (--reach-x to the sides, --reach-y above and under; nothing for a mouse). Every small control is listed here. */
-  :is(.dots button, .chips button, .swatches .swatch, .sign, .step, .rename, .fontname .btn, .ringlist .grip) { position: relative; }
-  :is(.dots button, .chips button, .swatches .swatch, .sign, .step, .rename, .fontname .btn, .ringlist .grip)::after { content: ""; position: absolute; inset: calc(-1 * var(--reach-y, 0px)) calc(-1 * var(--reach-right, var(--reach-x, 0px))) calc(-1 * var(--reach-y, 0px)) calc(-1 * var(--reach-x, 0px)); }
+  :is(.dots button, .gdot, .gchev, .chips button, .swatches .swatch, .sign, .step, .rename, .fontname .btn, .ringlist .grip) { position: relative; }
+  :is(.dots button, .gdot, .gchev, .chips button, .swatches .swatch, .sign, .step, .rename, .fontname .btn, .ringlist .grip)::after { content: ""; position: absolute; inset: calc(-1 * var(--reach-y, 0px)) calc(-1 * var(--reach-right, var(--reach-x, 0px))) calc(-1 * var(--reach-y, 0px)) calc(-1 * var(--reach-x, 0px)); }
   @media (pointer: coarse) {
     .dots button { --reach-x: calc(var(--guide-gap) / 2); --reach-y: calc((var(--guide-row) - var(--guide-dot)) / 2); }      /* a guide's colour: the whole height of its line */
+    :is(.gdot, .gchev) { --reach-x: calc(var(--guide-gap) / 2); --reach-y: calc((var(--guide-row) - var(--guide-none)) / 2); }      /* a guide's dot and tick (#527): the whole height of its line, half the room between them */
     .chiprow .chips button { --reach-x: calc(var(--pop-chip-gap) / 2); --reach-y: calc(var(--pop-chip-gap) / 2); }      /* a colour in the pop-out */
     .swatches .swatch { --reach-x: calc(var(--chip-gap) / 2); --reach-y: var(--reach); }      /* a band's sector */
     .sign, .rename, .step, .labelmenu { --reach-y: var(--reach); }      /* signs under the ring list, the pop-out's square and cross, the rename box, − and + */
@@ -123,8 +142,13 @@
   .chips button { width: var(--chip); height: var(--chip); border: var(--hair) solid var(--chip-rule); border-radius: var(--round-small); }
   .chips button.on { outline: var(--thick) solid var(--ink); outline-offset: var(--u1); }
   .chips button.add { border-color: var(--rule); background: var(--field); color: var(--ink); line-height: 1; }
-  .chips button.add:hover { background: var(--hover); border-color: var(--ink); }
+  @media (hover: hover) { .chips button.add:hover { background: var(--hover); border-color: var(--ink); } }
   .log, .link { display: block; width: 100%; margin: 0; padding: var(--u3) var(--u4); border: 0; color: var(--grey); font: var(--t-xs)/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
   .log { min-height: var(--log-least); max-height: var(--log-most); overflow-y: auto; }
   .link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }      /* the link on one line, cut at the box's edge; Copy link copies it whole (Okay, 16 Oct 2026, #277; three lines that wrapped before) */
+
+  /* shared by two regions (sectors.md §7): the browser's own list, unseen over a chevron box (the menu box, the Case switch) */
+  :is(.menubox, .casebox) > select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+  /* a gripper's groove: the one line across its pill (the ring list's pill, the drawer's gripper) */
+  :is(.listgrip, .sheetgrip)::after { content: ""; grid-area: 1 / 1; width: var(--grip-groove); height: var(--hair); background: var(--paper); }
 }

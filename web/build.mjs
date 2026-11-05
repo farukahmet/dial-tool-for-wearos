@@ -51,9 +51,7 @@ const time_face = `@font-face { font-family: "Dial Time"; font-weight: 300; src:
 const unit_face = `@font-face { font-family: "Dial Mono"; font-weight: 400; src: url(data:font/ttf;base64,${b64(path.join(here, "fonts/ui/DialMono.ttf"))}) format("truetype"); font-display: block; }`;
 // Dial Date (fonts/ui/date_font.py: Inter SemiBold, SIL OFL, its figures only): the bar's stacked date (Okay: "try inter with appropriate weight for that size")
 const date_face = `@font-face { font-family: "Dial Date"; font-weight: 600; src: url(data:font/otf;base64,${b64(path.join(here, "fonts/ui/DialDate-SemiBold.otf"))}) format("opentype"); font-display: block; }`;
-// Dial Pop (fonts/ui/pop_font.py: Barlow Regular, SIL OFL, cut down to letters and figures): the bar's date popup (#402; Okay, 19 Oct 2026: "Try barlow not condensed for font")
-const pop_face = `@font-face { font-family: "Dial Pop"; font-weight: 400; src: url(data:font/ttf;base64,${b64(path.join(here, "fonts/ui/DialPop-Regular.ttf"))}) format("truetype"); font-display: block; }`;
-const css = sheets.map((f) => fs.readFileSync(path.join(here, "src/css", f), "utf8")).join("\n") + pixel + time_face + unit_face + date_face + pop_face;
+const css = sheets.map((f) => fs.readFileSync(path.join(here, "src/css", f), "utf8")).join("\n") + pixel + time_face + unit_face + date_face;
 const version = /VERSION = "([^"]+)"/.exec(fs.readFileSync(path.join(here, "src/geometry.js"), "utf8"))[1];
 
 const html = `<!doctype html>
@@ -76,7 +74,7 @@ globalThis.__DIAL = {
     harfbuzz: "${b64(require.resolve("harfbuzzjs/dist/harfbuzz.wasm"))}",
     font: "${b64(FONT)}",
   },
-  bytes(name) { return Uint8Array.from(atob(this.packed[name]), (c) => c.charCodeAt(0)); },
+  bytes(name) { const s = atob(this.packed[name]), out = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i); return out; },      // a plain loop: Uint8Array.from with a function was the page's single largest cost at start (154 ms of 740, measured 25 Oct 2026)
 };
 window.addEventListener("error", (e) => { const a = document.getElementById("app"); if (a && a.textContent.startsWith("Starting")) a.innerHTML = '<p class="starting">Dial Tool couldn’t start: ' + e.message + '</p>'; });
 </script>

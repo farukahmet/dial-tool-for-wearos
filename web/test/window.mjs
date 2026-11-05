@@ -19,7 +19,11 @@ const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || 
 const visitor = async () => {
   const c = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, acceptDownloads: true, reducedMotion: "reduce" });      // panes fold at once here; their slide has a check of its own
   await c.grantPermissions(["local-fonts"]).catch(() => {});
-  await c.addInitScript(() => { if (!localStorage.getItem("dial-tool-folds")) localStorage.setItem("dial-tool-folds", '{"*":false}'); });      // every pane open, as for a visitor who has opened them; a first visit has a check of its own (#270)
+  // every storage touch in an init script waits a task (setTimeout 0): read or written at the document's very start, in
+  // Chromium a file:// page's localStorage is then lost at its next reload (measured 25 Oct 2026: 7 of 30 reloads came
+  // back empty, 0 of 30 with the wait; #541 — the short address's reload and the session's). The app never saw it: no
+  // browser runs scripts before a page. The same in every test and in icons/check.mjs.
+  await c.addInitScript(() => { setTimeout(() => { if (!localStorage.getItem("dial-tool-folds")) localStorage.setItem("dial-tool-folds", '{"*":false}'); }, 0); });      // every pane open, as for a visitor who has opened them; a first visit has a check of its own (#270)
   // the tool's own fonts come from its site; here they are served from web/fonts/, so the test needs no network
   await c.route("https://duztman.github.io/dial-tool/fonts/**", (route) => route.fulfill({ path: "fonts/" + decodeURIComponent(route.request().url().split("/fonts/")[1]), headers: { "access-control-allow-origin": "*" } }));
   return c;
@@ -30,7 +34,7 @@ const errors = [];
 page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
 page.on("pageerror", (e) => errors.push(e.message));
 const settings = process.argv[2];
-if (settings) await page.addInitScript((s) => { if (!sessionStorage.getItem("seeded")) { localStorage.setItem("dial-tool-last", s); sessionStorage.setItem("seeded", "1"); } }, fs.readFileSync(settings, "utf8"));
+if (settings) await page.addInitScript((s) => { setTimeout(() => { if (!sessionStorage.getItem("seeded")) { localStorage.setItem("dial-tool-last", s); sessionStorage.setItem("seeded", "1"); } }, 0); }, fs.readFileSync(settings, "utf8"));
 await page.goto("file://" + process.cwd() + "/dial-tool.html");
 await page.waitForFunction(() => window.dial_tool && window.dial_tool.statik, null, { timeout: 20000 });
 
@@ -54,6 +58,20 @@ const click_mm = async (x, y) => {
   await frame();
 };
 const clock = (r, a) => [r * Math.sin(a * Math.PI / 180), r * Math.cos(a * Math.PI / 180)];
+// Load… a settings file and wait on the app's own word for it (#541): the log says "loaded <name>" (or why not) the
+// moment load_text() has run, so the wait is on that line, not on a value the dial may or may not hold. If no word
+// comes in 5 s the file is handed over once more (the input may have been rebuilt under the first try), and a stall
+// prints what the app said (R17: never a bare timeout).
+const load_settings_file = async (file) => {
+  const name = path.basename(file), said = () => page.evaluate((n) => window.dial_tool.log_lines.findIndex((l) => l.includes(`loaded ${n}`) || l.includes(`load ${n}`)), name);
+  await page.evaluate(() => { window.__loading = window.dial_tool; });      // a load makes a new tool (reopen), with a log of its own
+  const came = (ms) => page.waitForFunction((n) => { const t = window.dial_tool, L = t.log_lines; return (t !== window.__loading && L.some((l) => l.includes(`loaded ${n}`))) || L.some((l) => l.includes(`couldn’t load ${n}`)); }, name, { timeout: ms }).then(() => true, () => false);
+  await page.setInputFiles("#load-file", file);
+  if (await came(5000)) return;
+  console.log(`      (the settings file's load gave no word in 5 s: handing it over again, #541)`);
+  await page.setInputFiles("#load-file", file);
+  if (!(await came(10000))) console.log("FAIL  loading the settings file: the app said nothing in 15 s — its log:", JSON.stringify(await page.evaluate(() => window.dial_tool.log_lines.slice(0, 8))), JSON.stringify(errors.slice(0, 3)), "said at", await said());
+};
 const download = async (selector) => {
   const [d] = await Promise.all([page.waitForEvent("download"), page.click(selector)]);
   const file = path.join(OUT, d.suggestedFilename());
@@ -63,7 +81,7 @@ const download = async (selector) => {
 
 // ── start with the default dial ──
 await tab("Export");
-await page.click("#plain");
+await page.evaluate(() => window.dial_tool.reopen({ ui_section: window.dial_tool.S.ui_section }));      // the plain starting values (the Settings file pane has Save… · Load… only, #434)
 await page.waitForFunction(() => window.dial_tool.statik);
 await frame();
 check(await S("S.rings.length === 3 && S.dial_d === 30"), "Defaults: the starting dial, three rings");
@@ -101,6 +119,7 @@ check(first_press && await S("t.nudge_at === '4'"), "click the numeral 4 → Rin
   check(set === '{"da":5}' && Math.abs(plus - 5.1) < 1e-9 && gone && rows === 4, `Nudge: its four adjusters are number rows with a slider and ± (${rows}); the angle typed 5, plus 0.1, back to 0 leaves nothing kept (#252)`);
   // sliding one hides the guides; a moment after, they are back (#252: "when a numeral is being nudged hide all guides")
   const guides = () => S("t.items.filter((i) => i.role === 'guide').length");
+  await page.evaluate(() => { window.dial_tool.S.guides = true; window.dial_tool.render(); }); await frame();      // the guides are off to start (#485): on, to see them hidden
   const shown = await guides();
   await page.$eval('[id^="nudge-dr-"][id$="-slider"]', (e) => { e.value = 0.5; e.dispatchEvent(new Event("input", { bubbles: true })); });
   await frame();
@@ -108,20 +127,38 @@ check(first_press && await S("t.nudge_at === '4'"), "click the numeral 4 → Rin
   await page.waitForTimeout(1400);
   const back = await guides();
   await page.evaluate(() => window.dial_tool.set_value("nudge", "dr", 0));
+  await page.evaluate(() => { window.dial_tool.S.guides = false; window.dial_tool.render(); });
   check(shown > 0 && hid === 0 && back === shown, `sliding a numeral's nudge hides the guides (${shown} → ${hid}), back a moment after (${back}) (#252, 4.45.2)`);
 }
 await click_mm(...clock(13, 150));                                  // the marker at 5
 check(await S("['ticks','markers','numerals','band'][S.rings[S.ui_ring].kind] === 'markers'"), "click a marker → the markers ring");
-{ // one mark of its own (4.78, #349; Okay's notes 2: "Each marker selectable and editable … a tick can grow or become anything else, a wedge"): a second press picks the marker, Nudge one mark opens on it, outlined on the dial; its own shape and size
+{ // one mark of its own (4.78, #349; Okay's notes 2: "Each marker selectable and editable … a tick can grow or become anything else, a wedge"): a second press picks the marker, Edit one mark opens on it, outlined on the dial; its own shape and size
   await click_mm(...clock(13, 150));
-  const picked = await page.evaluate(() => { const t = window.dial_tool; return [t.nudge_at, document.querySelector("#nudge-pick").selectedOptions[0].textContent, [...document.querySelectorAll(".form .pane h2")].some((h) => h.textContent === "Nudge one mark" && h.checkVisibility()), document.querySelector(".picked").getAttribute("d").length > 10]; });
+  const picked = await page.evaluate(() => { const t = window.dial_tool; return [t.nudge_at, document.querySelector("#nudge-pick").selectedOptions[0].textContent, [...document.querySelectorAll(".form .pane h2")].some((h) => h.textContent === "Edit one mark" && h.checkVisibility()), document.querySelector(".picked").getAttribute("d").length > 10]; });
   const before = await S("t.statik.rings.find((d) => d.ring === t.ring()).parts[5].bounds()");
-  await page.click("#nudge-shape-2"); await enter_value("#nudge-s-Size-", "1.8"); await frame();
+  await page.click("#nudge-shape-2"); await enter_value("#nudge-s-Scale-", "1.8"); await frame();
   const after = await S("[t.statik.rings.find((d) => d.ring === t.ring()).parts[5].bounds(), JSON.stringify(t.ring().nudge['5'])]");
   await page.click("#nudge-reset"); await frame();
   const wide = (b) => Math.hypot(b[2] - b[0], b[3] - b[1]);
   check(picked[0] === "5" && picked[1].includes("5:00") && picked[2] && picked[3] && after[1] === '{"shape":2,"s":1.8}' && wide(after[0]) > wide(before) * 1.4 && await S("t.ring().nudge['5'] === undefined"),
-    `a second press picks the marker at 5 (${picked[1]}); Nudge one mark opens on it, outlined on the dial; a wedge 1.8 × as big (${after[1]}); Reset this mark undoes it`);
+    `a second press picks the marker at 5 (${picked[1]}); Edit one mark opens on it, outlined on the dial; a wedge 1.8 × as big (${after[1]}); Reset this mark undoes it`);
+}
+{ // the list says only what is drawn (#513; Okay, 24 Oct 2026: "write out only what is seen"): the markers ring every 3rd, and only the kept marks are listed, by their times, no running number
+  const list = await page.evaluate(() => { const t = window.dial_tool, was = t.ring().every; t.set_value("ring", "every", 3); t.frame(); const out = [...document.querySelectorAll("#nudge-pick option")].map((o) => o.textContent); t.set_value("ring", "every", was); t.frame(); return [out, [...document.querySelectorAll("#nudge-pick option")].length]; });
+  check(list[0].length === 4 && list[0][0] === "12:00" && list[0][1] === "3:00" && list[1] > 4, `Edit one mark lists only the drawn marks: every 3rd → ${list[0].join(" · ")}; all again after (${list[1]})`);
+}
+{ // one numeral's own font and colour (#513; Okay, 24 Oct 2026: "Nudge one numeral is named 'edit one numeral' and gets font (with it color) change")
+  const own = await page.evaluate(async () => { const t = window.dial_tool, was = t.S.ui_ring;
+    t.S.ui_ring = t.S.rings.findIndex((r) => ["ticks", "markers", "numerals", "band"][r.kind] === "numerals"); t.nudge_at = "3"; t.sync_rows(); t.frame();
+    const R = t.ring(), before = JSON.stringify([R.nudge, R.cs]);
+    t.set_value("ring", "cs", { ...(R.cs || {}), 3: [0.8, 0.22, 0.1, 1] });
+    const entry = [...t.catalog.values()].find((e) => e.ps === "Barlow-SemiBold"); t.font_scope = "numeral"; await t.use_font(entry); t.frame();
+    const tints = (t.statik.rings.find((x) => x.ring === R) || {}).tints?.length, font = document.querySelector("#nudge-font").textContent, same = !document.querySelector("#nudge-font-ring").hidden, ps = R.nudge["3"]?.ps;
+    document.querySelector("#nudge-reset").click(); t.frame(); const after = JSON.stringify([R.nudge["3"] || null, (R.cs || {})["3"] || null]);
+    t.font_scope = "ring"; t.S.ui_ring = was; t.sync_rows(); t.frame();
+    return { tints, font, same, ps, after, before }; });
+  check(own.tints === 2 && own.font === "Barlow" && own.same && own.ps === "Barlow-SemiBold" && own.after === "[null,null]",
+    `Edit one numeral: the 3 in its own font (${own.ps}) and colour, drawn as a shape of its own (${own.tints} colours); Reset this numeral takes both away (${own.after})`);
 }
 await click_mm(...clock(13.9, 94));                                 // beside a thin tick (in its zone); 93° until the bar grew (#190): with the preview 10 shorter it fell to the marker at 3
 check(await S("['ticks','markers','numerals','band'][S.rings[S.ui_ring].kind] === 'ticks'"), "click in the ticks' zone → the ticks ring");
@@ -164,8 +201,8 @@ check(await S(`S.rings.length === ${before + 1} && S.rings[S.ui_ring].kind === 3
 const row_look = await page.$$eval(".ringlist li.ring", (l) => l.map((e) => { const c = getComputedStyle(e); return (e.classList.contains("on") ? "on " : "") + c.borderTopWidth + " " + c.backgroundColor; }));
 // the selected row has the colour of the selected ring's guide (13 Oct 2026); with that guide set to None, the light blue of before
 const guide_row = await page.evaluate(() => { const t = window.dial_tool, bg = () => getComputedStyle(document.querySelector(".ringlist li.ring.on")).backgroundColor; const was = t.ring().guide, a = bg(); t.set_value("ring", "guide", -2); const b = bg(); t.set_value("ring", "guide", was); return [a, b, bg(), t.S.gd_k_sel]; });
-check(row_look.every((x) => x.includes("1px")) && row_look.filter((x) => x.startsWith("on ")).length === 1 && guide_row[1] === "rgb(207, 228, 245)" && guide_row[0] !== guide_row[1] && guide_row[0] === guide_row[2] && !/255, 255, 255/.test(guide_row[0]),
-  `every ring is a framed row; the selected one is tinted with its own guide's colour (${guide_row[0]}), light blue when it has none`);
+check(row_look.every((x) => x.includes("1px")) && row_look.filter((x) => x.startsWith("on ")).length === 1 && guide_row[1] === "rgb(246, 213, 203)" && guide_row[0] !== guide_row[1] && guide_row[0] === guide_row[2] && !/255, 255, 255/.test(guide_row[0]),
+  `every ring is a framed row; the selected one is tinted with its own guide's colour (${guide_row[0]}), light red (--select, #483) when it has none`);
 // a ring's row: eye · grip · the kind as an icon · the name — no numbers, no colour (#254, 4.50; Okay's notes, p. 3: "no text details, only the kind icon"); the drawer under the selected one says the rest
 const rows = await page.$$eval(".ringlist li.ring", (l) => l.map((e) => { const x = (q) => Math.round(e.querySelector(q).getBoundingClientRect().left); return [e.querySelector(".kindicon svg") !== null, e.querySelector(".kindicon").dataset.kind, x(".eye") < x(".grip") && x(".grip") < x(".kindicon") && x(".kindicon") < x(".name"), e.querySelectorAll(".says, .dot.tiny").length, e.getBoundingClientRect().height, x(".kindicon")]; }));
 check(rows.every((x) => x[0] && /^[0-4]$/.test(x[1]) && x[2] && x[3] === 0) && new Set(rows.map((x) => x[4])).size === 1 && new Set(rows.map((x) => x[5])).size === 1,
@@ -188,12 +225,11 @@ check(rows.every((x) => x[0] && /^[0-4]$/.test(x[1]) && x[2] && x[3] === 0) && n
   await page.mouse.click(g2[0], g2[1]);
   const tapped = [...await m(), await page.evaluate(() => localStorage.getItem("dial-tool-ring-rows"))];
   await page.evaluate(([ring, n]) => { const t = window.dial_tool; t.S.rings.length = n; t.static_dirty = true; t.select_ring(ring); localStorage.removeItem("dial-tool-ring-rows"); }, was);
-  check(few[0] <= 5 && few[1] === "none" && fitted[0] === few[0] + 5 && fitted[1] === "grid" && fitted[2] === 0 && fitted[3] === 0 && fitted[5] > fitted[4] && fitted[6] === fitted[8] - fitted[4] && dragged[7] === String(fitted[0]) && dragged[4] === dragged[5] && tapped[7] === "5" && tapped[4] === fitted[4] && tapped[9] === "5",
-    `the list's pill (#256): none with ${few[0]} rings; with ${fitted[0]} it stands in the middle of the pinned part's line (${fitted[2]} / ${fitted[3]} off); selecting the last ring scrolls the list (${fitted[6]}) so its row and drawer end in view (${fitted[8]} in ${fitted[4]}); dragged three rows down the list shows all ${dragged[7]} (${dragged[4]} = ${dragged[5]}); a tap brings five back, kept by the browser`);
+  check(few[0] <= 5 && few[1] === "grid" && fitted[0] === few[0] + 5 && fitted[1] === "grid" && fitted[2] === 0 && fitted[3] === 0 && fitted[5] > fitted[4] && fitted[6] === fitted[8] - fitted[4] && dragged[7] === String(fitted[0]) && dragged[4] === dragged[5] && tapped[7] === "5" && tapped[4] === fitted[4] && tapped[9] === "5",
+    `the list's pill (#256): there with ${few[0]} rings too (Okay, 20 Oct 2026, 03:41: "All persistents get a resizer as default"); with ${fitted[0]} it stands in the middle of the pinned part's line (${fitted[2]} / ${fitted[3]} off); selecting the last ring scrolls the list (${fitted[6]}) so its row and drawer end in view (${fitted[8]} in ${fitted[4]}); dragged three rows down the list shows all ${dragged[7]} (${dragged[4]} = ${dragged[5]}); a tap brings five back, kept by the browser`);
 }
 // names a screen reader hears (#244, 4.47.2): a ring's row is an option in a listbox, reached with Tab and taken with
-// Enter; every slider says its name; a colour pill says whose colour it is before its hex; in the showcase the panel
-// and the bar are inert
+// Enter; every slider says its name; a colour pill says whose colour it is before its hex
 {
   const roles = await page.evaluate(() => { const ol = document.querySelector(".ringlist ol"), rows = [...ol.querySelectorAll("li.ring")]; return [ol.getAttribute("role"), ol.getAttribute("aria-label"), rows.map((r) => r.getAttribute("role") + ":" + r.getAttribute("aria-selected") + ":" + r.tabIndex).join(" "), [...document.querySelectorAll(".form input[type=range]")].every((s) => s.getAttribute("aria-label")), document.querySelector(".form input[type=range]").getAttribute("aria-label")]; });
   const was = await S("S.ui_ring"), target = await S("S.rings.length - 1");
@@ -201,9 +237,9 @@ check(rows.every((x) => x[0] && /^[0-4]$/.test(x[1]) && x[2] && x[3] === 0) && n
   const by_key = await S("S.ui_ring");
   await page.evaluate((i) => window.dial_tool.select_ring(i), was);
   const pill = await page.evaluate(() => { const t = window.dial_tool, was = t.S.ui_section; t.S.ui_section = 0; t.show_section(); const name = document.querySelector(".colourlist button.colour").getAttribute("aria-label"); t.S.ui_section = was; t.show_section(); t.sync_rows(); return name; });
-  const inert = await page.evaluate(() => { const t = window.dial_tool, p = document.querySelector(".panel"), b = document.querySelector(".bar"); t.showcase(true); const on = [p.inert, b.inert]; t.showcase(false); return [...on, p.inert, b.inert]; });
-  check(roles[0] === "listbox" && roles[1] === "Rings, top first" && /^(option:(true|false):0 ?)+$/.test(roles[2]) && roles[3] && roles[4] && by_key === target && /^[A-Z][a-z]+ · Colour #[0-9A-F]{6}$|^[A-Za-z ]+ #[0-9A-F]{6}$/.test(pill) && inert.join() === "true,true,false,false",
-    `names a screen reader hears (#244): the ring list is a listbox of options (${roles[2]}), a row taken with Enter (ring ${by_key}); every slider named (${roles[4]}); a colour pill named by its owner, then its hex (${pill}); in the showcase the panel and the bar are inert (${inert.join(" ")})`);
+  const inert = [false, false, false, false];      // the old Showcase made the panel and the bar inert; show mode keeps both in reach (22 Oct 2026)
+  check(roles[0] === "listbox" && roles[1] === "Rings, top first" && /^(option:(true|false):0 ?)+$/.test(roles[2]) && roles[3] && roles[4] && by_key === target && /^[A-Z][a-z]+ · Colour #[0-9A-F]{6}$|^[A-Za-z ]+ #[0-9A-F]{6}$/.test(pill) && inert.join() === "false,false,false,false",
+    `names a screen reader hears (#244): the ring list is a listbox of options (${roles[2]}), a row taken with Enter (ring ${by_key}); every slider named (${roles[4]}); a colour pill named by its owner, then its hex (${pill}); nothing inert (show mode keeps the panel and the bar in reach: ${inert.join(" ")})`);
 }
 const sum_before = await page.textContent("#ring-r-fig");
 await page.evaluate(() => { const t = window.dial_tool; t.set_value("ring", "r", t.ring().r - 1); });
@@ -266,7 +302,7 @@ const one = await page.evaluate(() => {
   const p = document.querySelector(".pinned"), holder = p.querySelector(".lineholder"), line = holder.querySelector(".ringline"), parts = [...line.children], on = p.querySelector(".ringlist li.ring.on");
   const c = getComputedStyle(holder), row = getComputedStyle(on), h = (e) => Math.round(e.getBoundingClientRect().height), sq = on.querySelector("#ring-kind-square"), det = line.querySelector("#ring-details"), lines = [...det.querySelectorAll(".line")];
   const m = (e) => { const r = e.getBoundingClientRect(); return (r.left + r.right) / 2; };
-  const fig = (id, b) => { const f = document.querySelector(id); return [f.textContent, Math.abs(m(f) - m(document.querySelector(b))) <= 1, getComputedStyle(f).fontFamily.includes("Dial Mono")]; };
+  const fig = (id, b) => { const f = document.querySelector(id); return [f.textContent, Math.abs(m(f) - m(document.querySelector(b))) <= 1, getComputedStyle(f).fontFamily === getComputedStyle(document.documentElement).fontFamily && getComputedStyle(f).fontSize === getComputedStyle(document.documentElement).fontSize]; };
   return { panes: p.querySelectorAll(".pane").length, under: holder.previousElementSibling === on, gap: Math.round(holder.getBoundingClientRect().top - on.getBoundingClientRect().bottom), order: parts.map((e) => e.id || e.className).join(" "),
     square: [sq && sq.tagName, sq && sq.dataset.kind, sq && sq.querySelector("svg") !== null, document.querySelector("#ring-change") === null],
     details: [lines.length, lines.map((l) => l.textContent), lines.every((l) => getComputedStyle(l).textOverflow === "ellipsis" && getComputedStyle(l).whiteSpace === "nowrap"), getComputedStyle(det.querySelector(".k")).color !== getComputedStyle(det).color],
@@ -274,14 +310,14 @@ const one = await page.evaluate(() => {
     hex: getComputedStyle(line.querySelector(".colour .hex")).display, swatch: getComputedStyle(line.querySelector(".colour")).borderTopColor,
     heights: [...new Set([...line.querySelectorAll(".colour, .valueb")].map(h))], round: [...line.querySelectorAll(".valueb")].every((e) => Math.round(e.getBoundingClientRect().width) === h(e)),
     title: p.querySelector("h2").textContent, figures: line.querySelectorAll(".figure").length, small: line.querySelectorAll("#ring-size svg .small").length,
-    ground: c.backgroundColor, frame: c.borderTopColor, row_frame: row.borderTopColor, tip: sq && sq.dataset.tip, rows: p.querySelectorAll(".ringlist li.ring").length, all: p.querySelectorAll(".ringlist li").length };
+    ground: c.backgroundColor, frame: c.borderTopColor, top: c.borderTopWidth, row_bottom: row.borderBottomColor, row_frame: row.borderTopColor, tip: sq && sq.dataset.tip, rows: p.querySelectorAll(".ringlist li.ring").length, all: p.querySelectorAll(".ringlist li").length };
 });
 const R0 = await S("S.rings[S.ui_ring]");
-check(one.panes === 1 && one.under && one.gap === -1 && /* one box since 4.81: the two lines lie on each other */  one.order === "ring-details ring-c-Colour ring-size ring-r" && one.square[0] === "BUTTON" && one.square[1] === String(R0.kind) && one.square[2] && one.square[3]
+check(one.panes === 1 && one.under && one.gap === -1 && /* one box: no line between them (Okay, 20 Oct 2026, 00:20) */ one.top === "0px" && one.row_bottom === "rgba(0, 0, 0, 0)" &&  one.order === "ring-details ring-c-Colour ring-size ring-r" && one.square[0] === "BUTTON" && one.square[1] === String(R0.kind) && one.square[2] && one.square[3]
   && one.details[0] === 2 && one.details[1][0] === `Width: ${R0.width} · Fill: ${R0.fill}%` && one.details[1][1].startsWith(`Positions: ${R0.count}`) && one.details[2] && one.details[3]
   && one.figs[0].join() === `${R0.width},true,true` && one.figs[1].join() === `${R0.r},true,true` && one.untagged
   && one.hex === "none" && one.swatch === "rgba(0, 0, 0, 0)" && one.heights.length === 1 && one.round && one.title === "Rings, top first" && one.all === one.rows + 1 && one.small === 1 && one.ground === "rgb(255, 255, 255)" && one.frame === one.row_frame && one.tip === "Kind",
-  `the ring drawer stands in the list, ${one.gap} under the selected ring's row: the details on two lines, grey names, each line cut when long (${one.details[1].join(" / ")}) · a bare swatch · size · radius, all ${one.heights[0]} high, no tags; the row's kind icon is a button and its size and radius (${one.figs.map((f) => f[0]).join(", ")}) stand in Dial Mono over their buttons; no Change; white, its frame the guide's colour like its row's (${one.frame}) (#335, #327)`);
+  `the ring drawer stands in the list, ${one.gap} under the selected ring's row: the details on two lines, grey names, each line cut when long (${one.details[1].join(" / ")}) · a bare swatch · size · radius, all ${one.heights[0]} high, no tags; the row's kind icon is a button and its size and radius (${one.figs.map((f) => f[0]).join(", ")}) stand over their buttons in the panel's type at its size (Okay, 20 Oct 2026, 00:20: "back to inter, regular size and still black"); no Change; white, its frame the guide's colour like its row's (${one.frame}) (#335, #327)`);
 // the square opens the kinds, over everything, under the square, the ring's kind marked, the note at the foot; a kind taken; Escape and a press outside put it away
 {
   await page.click("#ring-kind-square");
@@ -374,14 +410,14 @@ await page.evaluate((r) => window.dial_tool.set_value("ring", "r", r), r_before)
   await page.waitForTimeout(200);
   const pop = await page.evaluate(() => { const e = document.querySelector("#value-pop"), p = e.getBoundingClientRect(), c = getComputedStyle(e), row = e.querySelector(".row"), s = e.querySelector("input[type=range]"), k = s.getBoundingClientRect(), pp = +s.style.getPropertyValue("--p"), steps = [...e.querySelectorAll(".step")].map((x) => x.getBoundingClientRect());
     return [e.querySelector("label").textContent, e.parentElement === document.body && e.classList.contains("numpop"), Math.round(p.width), Math.round(p.height), c.borderRadius, getComputedStyle(row).borderRadius, [c.backgroundColor, getComputedStyle(row).backgroundColor, getComputedStyle(s).backgroundColor, getComputedStyle(steps.length ? e.querySelector(".step") : e).backgroundColor].join(" "),
-      [Math.round(k.height), ...steps.map((r) => Math.round(r.width) + "×" + Math.round(r.height))].join(" "), steps.length === 2 && Math.abs(steps[1].left - steps[0].right - 64.5) <= 1 && e.querySelectorAll(".step svg").length === 2, [e.querySelector(".popname-line") === null && e.querySelector(".row > label").hidden, Math.round(e.querySelector(".popvalue").getBoundingClientRect().height), getComputedStyle(e.querySelector(".popvalue")).backgroundColor, getComputedStyle(e.querySelector(".popvalue input")).fontWeight, getComputedStyle(e.querySelector(".popvalue input")).fontSize].join(" "),
+      [Math.round(k.height), ...steps.map((r) => Math.round(r.width) + "×" + Math.round(r.height))].join(" "), steps.length === 2 && Math.abs(steps[0].left - p.left - parseFloat(c.paddingLeft)) <= 1 && Math.abs(p.right - steps[1].right - parseFloat(c.paddingRight)) <= 1 && e.querySelectorAll(".step svg").length === 2, [e.querySelector(".popname-line") === null && e.querySelector(".row > label").hidden, Math.round(e.querySelector(".popvalue").getBoundingClientRect().height), getComputedStyle(e.querySelector(".popvalue")).backgroundColor, getComputedStyle(e.querySelector(".popvalue input")).fontWeight, getComputedStyle(e.querySelector(".popvalue input")).fontSize, e.querySelector(".steps .popword")?.textContent, (() => { const g = e.previousElementSibling; return g && g.classList.contains("numground") ? [getComputedStyle(g).mixBlendMode, getComputedStyle(g).backgroundColor, Math.round(g.getBoundingClientRect().height)].join(" ") : "no ground"; })()].join(" "),
       [k.left + k.height / 2 + pp * (k.width - k.height), k.top + k.height / 2]]; });
   await shot("4c19-size-pop");
   await page.keyboard.type("x2"); await page.keyboard.press("Enter");
   const w_after = await S("S.rings[S.ui_ring].width");
   await page.evaluate((w) => window.dial_tool.set_value("ring", "width", w), w_before);
-  check(Math.abs(dragged - (w_before + 0.4)) < 1e-9 && pop[0] === "Band width" && pop[1] && pop[2] === 188 && pop[3] === 186 && pop[4] === "37.125px" && pop[5] === "0px" && pop[6] === "color(srgb 0.360784 0.360784 0.345098 / 0.85) rgba(0, 0, 0, 0) rgb(255, 255, 255) rgb(63, 63, 62)" && pop[7] === "50 50×50 50×50" && pop[8] && pop[9] === "true 50 rgb(185, 185, 180) 700 30.75px" && Math.abs(pop[10][0] - sb[0]) <= 1 && Math.abs(pop[10][1] - sb[1]) <= 1 && Math.abs(w_after - 2 * w_before) < 1e-9 && await page.$("#value-pop") === null,
-    `the size button, before the radius: dragged 16 to the right a band is 0.4 wider; a click opens the controller (#249; Okay's second drawing, controller 2.svg, 18 Oct 2026) with its knob under the press (${pop[10].map(Math.round)} for ${sb.map(Math.round)}): one dark square at 85 % (${pop[6]}) holding, all 50 high at three quarters since 4.85 (${pop[7]}), the value in bold 31 on a grey pill and no name ("No name necessary": ${pop[9]}), the slider in a white pill, − and + as two dark discs 65 apart; ${pop[2]} × ${pop[3]}, corners ${pop[4]}; it takes x2`);
+  check(Math.abs(dragged - (w_before + 0.4)) < 1e-9 && pop[0] === "Band width" && pop[1] && pop[2] === 188 && pop[3] === 151 && pop[4] === "27.1012px" && pop[5] === "0px" && pop[6] === "rgba(0, 0, 0, 0) rgba(0, 0, 0, 0) rgb(255, 255, 255) rgb(0, 0, 0)" && pop[7] === "50 29×29 29×29" && pop[8] && pop[9] === "true 35 rgb(185, 185, 180) 700 21.525px Band width multiply rgb(92, 92, 88) 151" && Math.abs(pop[10][0] - sb[0]) <= 1 && Math.abs(pop[10][1] - sb[1]) <= 1 && Math.abs(w_after - 2 * w_before) < 1e-9 && await page.$("#value-pop") === null,
+    `the size button, before the radius: dragged 16 to the right a band is 0.4 wider; a click opens the controller (#249; Okay's second drawing, controller 2.svg, 18 Oct 2026) with its knob under the press (${pop[10].map(Math.round)} for ${sb.map(Math.round)}): its ground a twin under it that multiplies with what is below (24 Oct 2026: "multiply with the bg at all times instead of opacity"; ${pop[6]}); the slider's pill 50, the value's pill at 70 % as wide as its figures, riding over the knob, the discs at 70 % × 85 % (${pop[7]}; 18:31: "Buttons a bit more smaller %15"), the name between − and + (${pop[9]}), − and + at the two ends; ${pop[2]} × ${pop[3]}, corners concentric with the discs, ${pop[4]}; it takes x2`);
   // sliding in it shows the guides, as set, even with Guides off, and they go a moment after (Okay, on 4.45: "activate guides on slide. Even if off")
   await page.evaluate(() => window.dial_tool.set_value("global", "guides", false));
   await page.click("#ring-size"); await page.waitForTimeout(200);
@@ -392,19 +428,19 @@ await page.evaluate((r) => window.dial_tool.set_value("ring", "r", r), r_before)
   await page.waitForTimeout(1400);
   const gone = await S("t.items.filter((i) => i.role === 'guide').length");
   await page.evaluate((w) => { window.dial_tool.set_value("ring", "width", w); window.dial_tool.set_value("global", "guides", true); }, w_before);
-  check(live > 0 && gone === 0, `sliding in the popup with Guides off shows the guides (${live} drawn), gone a moment after (${gone}) (4.45.2)`);
+  check(live > 0 && gone < live, `sliding in the popup with Guides off shows the guides (${live} drawn), a moment after only the selected ring's, with its handles (${gone}) (4.45.2; Okay, 04:52: "Handles and guides show together at all times")`);
 }
 { // a full row's name opens the popup; pressed and moved, it changes the value (#249, #170)
   await page.click('button[data-tab="Dial"]'); await frame();
   const lab = await page.$('label[for="global-dial-d-Diameter"]');
   await lab.click(); await frame();
-  const opened = await page.evaluate(() => { const e = document.querySelector("#value-pop"); return !!e && e.querySelector("label").textContent === "Diameter" && document.activeElement.id === "global-dial-d-Diameter" && document.activeElement.closest("#value-pop") !== null; });
+  const opened = await page.evaluate(() => { const e = document.querySelector("#value-pop"); return !!e && e.querySelector("label").textContent === "Diameter" && document.activeElement.id === "global-dial-d-Diameter-pop" && document.activeElement.closest("#value-pop") !== null && document.querySelectorAll("#global-dial-d-Diameter").length === 1; });
   await page.keyboard.press("Escape");
   const before = await S("S.dial_d"), b = await lab.boundingBox();
   await page.mouse.move(b.x + 10, b.y + b.height / 2); await page.mouse.down(); await page.mouse.move(b.x + 30, b.y + b.height / 2, { steps: 5 }); await page.mouse.up();
   const after = await S("S.dial_d"), still = await page.$("#value-pop");
   await page.evaluate((v) => window.dial_tool.set_value("global", "dial_d", v), before);
-  check(opened && after === before + 1 && still === null, `a row's name opens its popup, the field ready (Diameter); pressed and moved 20 to the right it is 1 more (${before} → ${after}) and nothing opens`);
+  check(opened && after === before + 1 && still === null, `a row's name opens its popup, the field ready (Diameter; the controller's copy of the row ends in -pop, so the row's id stands once, #542f); pressed and moved 20 to the right it is 1 more (${before} → ${after}) and nothing opens`);
   await page.click('button[data-tab="Rings"]'); await frame();
 }
 // undo: ⌘Z takes one step back, ⇧⌘Z forward again; a drag is one step; the window's state stays (13 Oct 2026)
@@ -449,7 +485,7 @@ const anchors = await page.evaluate(() => {
   const t = window.dial_tool, ring = t.ring(), menu = document.querySelector("#value-pop .menulabel select"), label = () => document.querySelector("#value-pop .menulabel label").textContent;
   const out = { options: [...menu.options].map((o) => o.textContent).join(" "), labels: [label()], r: ring.r };
   for (const v of ["3", "4", "0"]) { menu.value = v; menu.dispatchEvent(new Event("change")); out.labels.push(label()); out["a" + v] = ring.anchor; }
-  // no name in the controller (Okay, 18 Oct 2026, controller 2.svg: "No name necessary"): the menu stays on the row; the
+  // the menu stays on the row, not in the controller; the
   // value's pill as far from the square's top as the discs from its foot
   const pop = document.querySelector("#value-pop"), p = pop.getBoundingClientRect(), head = pop.querySelector(".pophead").getBoundingClientRect(), steps = pop.querySelector(".steps").getBoundingClientRect();
   out.look = [pop.querySelector(".menulabel").hidden, Math.round(head.top - p.top), Math.round(p.bottom - steps.bottom), Math.round(p.height), Math.round(head.height)];
@@ -458,8 +494,8 @@ const anchors = await page.evaluate(() => {
 await shot("4c10-radius-pop");
 await page.keyboard.press("Escape");
 await page.click(`.ringlist li:nth-child(${ring_before + 1} of .ring) .name`);
-check(anchors.options === "Centre Outer edge Inner edge" && anchors.labels.join(" | ") === "Centre radius | Outer edge radius | Inner edge radius | Centre radius" && anchors.a3 === 3 && anchors.a4 === 4 && anchors.a0 === 0 && anchors.look.join(" ") === "true 12 12 186 50",
-  `the radius of numerals has a menu beside its label: ${anchors.options} (Baseline and Ascender out, #418: "Remove these two from the functions as well"); the label follows: ${anchors.labels.join(" → ")}; in the controller no name, the value's pill as far from the top as the discs from the foot (${anchors.look.join(" · ")}) (controller 2.svg, 18 Oct 2026)`);
+check(anchors.options === "Outer Middle Inner" && anchors.labels.join(" | ") === "Middle radius | Outer radius | Inner radius | Middle radius" && anchors.a3 === 3 && anchors.a4 === 4 && anchors.a0 === 0 && anchors.look.join(" ") === "true 12 12 151 35",
+  `the radius of numerals has a menu beside its label: ${anchors.options}, the band's circle that holds still (#488); the label follows: ${anchors.labels.join(" → ")}; in the controller the menu stays on the row, the value's pill as far from the top as the discs from the foot (${anchors.look.join(" · ")}) (controller 2.svg, 18 Oct 2026)`);
 // …and Baseline and Ascender are retired from the drawing too (#418): a ring stored with one is centred on its radius, as with Centre
 const at12 = [];
 for (const v of [1, 2, 0]) {
@@ -467,8 +503,8 @@ for (const v of [1, 2, 0]) {
   await frame();
   at12.push(await page.evaluate(() => { const t = window.dial_tool, d = t.statik.rings.find((x) => x.ring.kind === 2), b = d.parts[0].bounds(); return [b[1] - d.ring.r, b[3] - d.ring.r, (b[1] + b[3]) / 2 - d.ring.r]; }));
 }
-check(Math.abs(at12[0][2]) < 0.001 && Math.abs(at12[1][2]) < 0.001 && Math.abs(at12[2][2]) < 0.001,
-  `at 12 the numeral's middle is on the radius with a stored Baseline (${at12[0][2].toFixed(4)}), Ascender (${at12[1][2].toFixed(4)}) and Centre (${at12[2][2].toFixed(4)}): the two are retired (Okay, 19 Oct 2026, #418)`);
+check(Math.abs(at12[0][2] - at12[2][2]) < 1e-6 && Math.abs(at12[1][2] - at12[2][2]) < 1e-6 && Math.abs(at12[2][2]) < 0.03,
+  `at 12 a stored Baseline, Ascender and Centre all draw as Middle (${at12.map((x) => x[2].toFixed(4)).join(" · ")}): the label's middle a hair off the radius, which is the capital H's middle, not the label's own (#418, #488)`);
 { // the edges, tangent (#338; Okay, 18 Oct 2026: "Tangent to inner or outer"), and a change of anchor that moves nothing on
   // the dial, only the dotted line (#326: "Nothing changed … just the dotted line moves"; "applies to reverse auto reverse")
   const r = await page.evaluate(() => {
@@ -484,8 +520,8 @@ check(Math.abs(at12[0][2]) < 0.001 && Math.abs(at12[1][2]) < 0.001 && Math.abs(a
     const moved = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
     return { top: out12[3] - keep.r, inner: in12[1] - keep.r, still: Math.max(moved(before, after), moved(before3, after3), moved(before, after_in)), r2: r2 - keep.r };
   });
-  check(Math.abs(r.top) < 0.01 && Math.abs(r.inner) < 0.01 && r.still < 0.02 && Math.abs(r.r2) > 0.1,      // 0.02: labels of different heights touch one line with an edge, each sits on its own middle with Centre — a hundredth, seen at 400 %
-    `Outer edge: the numeral at 12 touches the radius with its top (${r.top.toFixed(3)}); Inner edge: the 12's foot (${r.inner.toFixed(3)}); a radial ring changed from Centre to Outer edge and Inner edge doesn't move (${r.still.toFixed(4)}), its radius does (${r.r2.toFixed(3)})`);
+  check(Math.abs(r.top) < 0.03 && Math.abs(r.inner) < 0.03 && r.still < 0.02 && Math.abs(r.r2) > 0.1,      // 0.03: the band is the capital H's height; this font's figures stand 0.023 above it (measured 21 Oct 2026)
+    `Outer (#488): the numeral at 12 touches the outer circle, the radius, with its top (${r.top.toFixed(3)}); Inner edge: the 12's foot (${r.inner.toFixed(3)}); a radial ring changed from Centre to Outer edge and Inner edge doesn't move (${r.still.toFixed(4)}), its radius does (${r.r2.toFixed(3)})`);
 }
 { // one mark nudged (#349, groundwork: "Each individual marker could be selected and edited"): a mark keeps its own radius ±,
   // angle ±, size × and turn in the ring's nudge, as a numeral does
@@ -519,7 +555,7 @@ check(Math.abs(at12[0][2]) < 0.001 && Math.abs(at12[1][2]) < 0.001 && Math.abs(a
   await page.evaluate(() => { const t = window.dial_tool; for (const r of t.S.rings) r.from = 0; t.static_dirty = true; t.render(); });
   const numerals_panes = await page.evaluate(() => { const t = window.dial_tool; t.S.ui_ring = t.S.rings.findIndex((r) => r.kind === 2); t.show_section(); t.sync_rows(); return [...document.querySelectorAll(".form .pane h2")].filter((h) => h.closest(".pane").offsetParent).map((h) => h.textContent).slice(0, 2).join(" · "); });
   await page.evaluate(([ring, all]) => { const t = window.dial_tool; t.S.ui_ring = ring; t.S.gd_rings = all; t.show_section(); t.sync_rows(); t.draw(); }, was);
-  check(from[0][1] === 0 && from[0][0] < 0 && Math.abs(from[1][0] + from[1][1]) < 0.001 && from[2][0] === 0 && from[2][1] > 0 && from[0][2] === 0 && Math.abs(from[1][2] - 0.5) < 0.001 && from[2][2] === 1 && from.every((f) => f[4]) && from.map((f) => f[5]).join(" | ") === "Outer | Middle | Inner" && from[0][6] === "Resize Ring · Shape" && numerals_panes === "Type · Resize Ring",
+  check(from[0][1] === 0 && from[0][0] < 0 && Math.abs(from[1][0] + from[1][1]) < 0.001 && from[2][0] === 0 && from[2][1] > 0 && from[0][2] === 0 && Math.abs(from[1][2] - 0.5) < 0.001 && from[2][2] === 1 && from.every((f) => f[4]) && from.map((f) => f[5]).join(" | ") === "Outer | Middle | Inner" && from[0][6] === "Resize Ring · Shapes" && numerals_panes === "Type · Resize Ring",
     `resize from (#257): a marker's outer end on the radius (${from[0].slice(0, 2)}), then its middle (${from[1].slice(0, 2)}), then its inner end (${from[2].slice(0, 2)}); a band likewise (its outer edge ${from.map((f) => f[2]).join(" · ")} past its radius); the ring's dotted guide at its radius each time (dotted at ${from[0][7]}); the heading's menu says it (${from.map((f) => f[5]).join(" → ")}, #419: "Resize Ring" and "from"); Resize first under the pinned part (${from[0][6]}), Type first for numerals (${numerals_panes}, #296)`);
 }
 // a text ring (#297, 4.48): a fifth kind, its words at every position; its panes Text · Type · Resize; its angle snaps to the other rings' indices
@@ -640,100 +676,131 @@ check(JSON.stringify(await S("S.rings.map((r) => r.name)")) === JSON.stringify(o
 // ── guides: a switch on the preview's bottom left (top right until 4.58), with an arrow that opens their list (five kinds, eight colours) ──
 await tab("Dial");
 check(await page.$("main .guides #guides") !== null && await page.$(".panel #guides") === null && await page.isHidden("#guide-list"), "the Guides switch stands on the preview, not in the panel; its list is shut");
-const guides_at = await page.evaluate(() => { const g = document.querySelector("#tiny-open").getBoundingClientRect(), e = document.querySelector("#eye-box").getBoundingClientRect(), m = document.querySelector("main").getBoundingClientRect(), u = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--unit")); return [Math.round(m.right - g.right), Math.round(m.right - e.right), +(e.top - g.bottom).toFixed(1), u]; });
-check(guides_at[0] === 12 && guides_at[1] === 12 && Math.abs(guides_at[2] - guides_at[3]) < 0.6, `the Tiny Preview's eye stands over the dial-alone eye at the bottom right, both 12 from the preview's right, a unit apart (${guides_at.join(" / ")}) (4.82; top right until 4.81)`);
+const guides_at = await page.evaluate(() => { const r = (q) => document.querySelector(q).getBoundingClientRect(), g = r("#tiny-open"), i = r(".irisbox"), e = r("#eye-box"), m = r("main"), u = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--unit"));
+  return [Math.round(m.right - g.right), Math.round(m.right - i.right), Math.round(m.right - e.right), +(e.top - g.bottom).toFixed(1), +(i.top - e.bottom).toFixed(1), u, Math.round(m.bottom - i.bottom)]; });
+check(guides_at[0] === 12 && guides_at[1] === 12 && guides_at[2] === 12 && Math.abs(guides_at[3] - guides_at[5]) < 0.6 && Math.abs(guides_at[4] - guides_at[5]) < 0.6 && guides_at[6] === 12,
+  `at the bottom right, stacked a unit apart and all 12 from the preview's right, top to bottom: the Tiny Preview, the dial alone (the eye), show mode (the rays), lowest, 12 from the foot (${guides_at.join(" / ")}) (Okay, 24 Oct 2026: "Lowest is activate middle normal, top mini")`);
 await page.click("#guides-more");
-check(await page.isVisible("#guide-list") && (await page.$$eval("#guide-list .guidescroll > .guidekind .name", (n) => n.map((e) => e.textContent))).join() === "Centre hole,Centre lines" && await page.$$eval("#guide-list .guidekind >> nth=0 >> .dots .tone", (b) => b.length) === 8 && await page.$eval("#guide-list .guiderings", (e) => e.querySelectorAll(".guidekind.ring").length) === await S("S.rings.length") && await page.$("#guide-list .swatch") === null,
-  "the arrow drops the list: the centre hole's guide first, then the centre lines (no dial edge since 15 Oct 2026, no window radii since 4.42.5), then a line for every ring and every window that is on, each with None and eight round colours, no free colour");
-// the list's look (Okay, 16 Oct 2026, #271; 18 Oct, notes 2: "fainter"): a colour not chosen at 40 % (60 % until 4.52), the "none" sign one path; lines 30 high (#305, 4.45.3: "tighter"; 38 before)
+// the list in one column (#539; Okay, 25 Oct 2026): a line is a name, its colour as a dot and a chevron that opens None
+// and seven colours in a small box under it; Rings and Windows have a chevron box on their headings (R15: every menu is one)
+const menu = async (id, word) => { await page.selectOption("#" + id, { label: word }); await frame(); };
+const pop_pick = async (dot, k) => { await page.click(dot); await page.click(k === null ? "#guide-pop-none" : `#guide-pop .tone >> nth=${k}`); };
+const dot_c = (sel) => page.$eval(sel, (d) => d.style.getPropertyValue("--c"));
 {
-  const look = await page.evaluate(() => { const q = (s) => document.querySelector("#guide-list " + s); return [Math.round(q(".guidekind").getBoundingClientRect().height), getComputedStyle(q(".tone:not(.on)")).opacity, getComputedStyle(q(".tone.on")).opacity, q(".none svg").querySelectorAll("path, circle, line").length]; });
-  check(look[0] === 30 && look[1] === "0.4" && look[2] === "1" && look[3] === 1, `a guide's line is ${look[0]} high; a colour not chosen shows at ${look[1]}, the chosen one whole; the "none" sign is ${look[3]} path, so nothing in it overlaps`);
+  const col = await page.evaluate(() => { const list = document.querySelector("#guide-list"), heads = [...list.querySelectorAll(".guidescroll .guidehead")].filter((h) => h.offsetParent), lines = [...list.querySelectorAll(".guidescroll .guidekind")].filter((l) => l.offsetParent), r = (e) => e.getBoundingClientRect();
+    const right = [...heads, ...lines].map((e) => Math.round(r(e).right)), u = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--unit"));
+    return [Math.round(r(list).width), heads.map((h) => h.querySelector(".name").textContent).join(), right.every((x) => x === right[0]), lines.every((l) => Math.abs(r(l).left - r(heads[0]).left - 2 * u) < 0.6), heads.every((h) => getComputedStyle(h.querySelector(".name")).fontWeight === "600"), lines.every((l) => [...l.querySelectorAll(".gdot, .gchev")].every((c) => Math.round(r(c).width) === 20 && Math.round(r(c).height) === 20 && getComputedStyle(c).borderRadius === "50%"))]; });
+  check(await page.isVisible("#guide-list") && col[0] === 240 && col[1].startsWith("Dial,Rings") && col[2] && col[3] && col[4] && col[5] && (await page.$$eval("#guide-list .guiderings", (g) => [...g[0].querySelectorAll(".guidekind .name")].map((e) => e.textContent))).join() === "Centre hole,Centre lines" && await page.$$eval("#guide-pop .tone", (b) => b.length) === 7 && await page.$$eval("#guide-list .guiderings", (g) => g[1].querySelectorAll(".guidekind.ring").length) === await S("S.rings.length") && await page.$("#guide-list .swatch") === null,
+    `the arrow drops the list, one column ${col[0]} wide (#539: "One column layout now and always"): bold headings (${col[1]}) with their lines inset two units under them, every line ending on one right edge, a dot and a chevron each in a 20 px circle; None and seven colours by a guide's chevron (no black: "Drop the black"), no free colour`);
 }
-// windows have their own section, as rings (#271): All · Selected · None, Selected to start; a line per window that is on, in its own colour; its edges drawn solid, its middle dotted, as a ring's (#272).
+{ // the list's look: lines 30 high (#305: "tighter"); in the dot's popup a colour not chosen at 40 % (18 Oct, notes 2: "fainter"), the "none" sign one path
+  await page.click("#guide-gd_hole-colour");
+  const look = await page.evaluate(() => { const q = (s) => document.querySelector("#guide-list " + s); return [Math.round(q(".guidekind").getBoundingClientRect().height), getComputedStyle(q("#guide-pop .tone:not(.on)"), "::before").opacity, getComputedStyle(q("#guide-pop .tone.on"), "::before").opacity, q("#guide-pop .none svg").querySelectorAll("path, circle, line").length, !q("#guide-pop").hidden]; });
+  await page.click("#guide-gd_hole-colour");
+  check(look[0] === 30 && look[1] === "0.4" && look[2] === "1" && look[3] === 1 && look[4] && await page.isHidden("#guide-pop"), `a guide's line is ${look[0]} high; its dot opens the colours by it, a colour not chosen at ${look[1]} (its dot, the ::before, alone: the button under it whole — found 25 Oct 2026 at 0.4 × 0.4), the chosen one whole; the "none" sign is ${look[3]} path; the dot again shuts them`);
+}
+// windows have their own section, as rings (#271): Selected · All · None, Selected to start; a line per window that is on, in its own colour; its edges drawn solid, its middle dotted, as a ring's (#272).
 // One thing in focus (#301): the tab says which — Rings its selected ring, Windows its selected window, the others neither; with All the rest show faded
 {
-  const start = await page.evaluate(() => { const t = window.dial_tool, h = [...document.querySelectorAll("#guide-list .guidehead")].find((e) => e.textContent.startsWith("Windows")); return [!!h && !h.hidden, t.S.gd_wins, t.S.gd_wsel, document.querySelector("#guide-windows-selected").classList.contains("on"), [...document.querySelectorAll("#guide-list .guidekind .name")].map((e) => e.textContent).includes("Window at 3")]; });
-  // in a tab (0 Dial · 1 Rings · 3 Windows): the dotted middles drawn, "f" for a faded one
+  const start = await page.evaluate(() => { const t = window.dial_tool, h = [...document.querySelectorAll("#guide-list .guidehead")].find((e) => e.textContent.startsWith("Windows")); return [!!h && !h.hidden, t.S.gd_wins, t.S.gd_wsel, document.querySelector("#guide-windows").closest(".menubox").querySelector(".v").textContent === "Selected", [...document.querySelectorAll("#guide-list .guidekind .name")].map((e) => e.textContent).includes("Window at 3")]; });
   const dotted = (n) => S(`(() => { const was = S.ui_section; S.ui_section = ${n}; t.draw(); const d = t.items.filter((i) => i.role === "guide" && i.dots).map((i) => (i.stroke[3] < 1 ? "f" : "d")).join(""); S.ui_section = was; t.draw(); return d; })()`);
   const sel = [await dotted(0), await dotted(1), await dotted(3)];
-  await page.click("#guide-windows-all");
+  await menu("guide-windows", "All");
   const all = [await dotted(0), await dotted(1), await dotted(3)];
-  await page.click("#guide-windows-none");
+  await menu("guide-windows", "None");
   const none = [await S("[S.gd_wins, S.gd_wsel]"), await dotted(3)];
-  await page.click("#guide-windows-selected");
-  const tones = await page.evaluate(() => { const on = (name) => [...document.querySelectorAll("#guide-list .guidekind")].find((e) => e.querySelector(".name").textContent === name).querySelector(".tone.on").title; return [on("Centre hole"), on("Window at 3")]; });
-  check(start.every((x) => x === true || x === false) && start[0] && !start[1] && start[2] && start[3] && start[4] && sel.join() === ",d,d" && all.join() === "f,df,d" && !none[0][0] && !none[0][1] && none[1] === "" && tones[0] !== tones[1],
-    `Windows: its heading with All · Selected · None (Selected to start), a line for the date window. The guides follow the tab (#301): Dial none, Rings the selected ring's, Windows the selected window's (${sel.map((x) => x || "–").join(" · ")}); with All the window's shows everywhere, faded out of its tab (${all.map((x) => x || "–").join(" · ")}); None takes it away; the first window's guide starts in a colour of its own (${tones[1]}; the centre hole's ${tones[0]})`);
+  await menu("guide-windows", "Selected");
+  const tones = [await dot_c("#guide-gd_hole-colour"), await dot_c("#guide-window-0-colour")];
+  check(start.every((x) => x === true || x === false) && start[0] && !start[1] && start[2] && start[3] && start[4] && sel.join() === ",dd,d" && all.join() === "f,ddf,d" && !none[0][0] && !none[0][1] && none[1] === "" && tones[0] !== tones[1],
+    `Windows: its heading with its menu, Selected · All · None (Selected to start), a line for the date window. The guides follow the tab (#301): Dial none, Rings the selected ring's, Windows the selected window's (${sel.map((x) => x || "–").join(" · ")}); with All the window's shows everywhere, faded out of its tab (${all.map((x) => x || "–").join(" · ")}); None takes it away; the first window's guide starts in a colour of its own (${tones[1]}; the centre hole's ${tones[0]})`);
 }
 // guides are connected to the rings (13 Oct 2026): each ring's edges in its own colour, different ones to start with; the row in the ring list is tinted with it
 {
-  const start = await page.evaluate(() => { const t = window.dial_tool, G = t.S.rings.map((r, i) => [r.guide, [...document.querySelectorAll("#guide-list .guidekind.ring")][i].querySelector(".tone.on").title]); return G; });
-  await page.click("#guide-rings-all");      // all rings' guides, to see their colours (only the selected ring's to start since 15 Oct 2026)
+  const start = await page.$$eval("#guide-list .guidekind.ring .gdot", (d) => d.map((x) => x.style.getPropertyValue("--c")));
+  await menu("guide-rings", "All");      // all rings' guides, to see their colours (only the selected ring's to start since 15 Oct 2026)
   const strokes = await page.evaluate(() => { const t = window.dial_tool; t.draw(); return [...new Set(t.items.filter((i) => i.role === "guide").map((i) => i.stroke.map((v) => Math.round(v * 255)).join(",")))].length; });
-  await page.click("#guide-list .guidekind.ring >> nth=0 >> .tone >> nth=5");
+  await pop_pick("#guide-ring-0-colour", 5);
   const set = await S("S.rings[0].guide");
-  await page.click("#guide-list .guidekind.ring >> nth=0 >> .none");
+  await pop_pick("#guide-ring-0", null);      // None: hidden
   const none = await S("S.rings[0].guide");
-  await page.click("#guide-rings-selected");
+  const ring_off = await page.$eval("#guide-ring-0", (c) => c.closest(".guidekind").classList.contains("off"));
+  await pop_pick("#guide-ring-0", 4);
+  const back = await S("S.rings[0].guide");
+  await menu("guide-rings", "Selected");
   const only = await page.evaluate(() => { const t = window.dial_tool; t.draw(); return [t.S.gd_rings, t.S.gd_sel]; });
-  await page.click("#guide-rings-all");
-  await page.evaluate(() => { window.dial_tool.set_value("ring", "guide", -1); const t = window.dial_tool; t.S.rings[0].guide = -1; t.sync_rows(); t.render(); });
-  check(new Set(start.map((x) => x[1])).size === Math.min(start.length, 6) && strokes >= 3 && set === 5 && none === -2 && only[0] === false && only[1] === true,
-    `every ring has a guide colour of its own to start with (${start.map((x) => x[1]).join(" ")}); a ring's line in the list changes it or hides it; Rings: All · Selected · None says which rings show theirs`);
-  // guides you add: a line, a crosshair, a circle
+  await menu("guide-rings", "All");
+  await page.evaluate(() => { const t = window.dial_tool; t.S.rings[0].guide = -1; t.sync_rows(); t.render(); });
+  check(new Set(start).size === Math.min(start.length, 6) && strokes >= 3 && set === 5 && none === -2 && ring_off && back === 4 && only[0] === false && only[1] === true,
+    `every ring has a guide colour of its own to start with (${start.join(" ")}); a ring's chevron changes it or, with None, hides it (an empty ring); Rings' pill, Selected · All · None, says which rings show theirs`);
+  // guides you add: a line, a crosshair, a circle; the minus on Added takes the last away (Okay, 24 Oct 2026: "The last added")
   await page.click("#guide-add-line"); await page.click("#guide-add-crosshair"); await page.click("#guide-add-circle");
   await enter_value("#guide-more-0-a", "45");
   await enter_value("#guide-more-1-r", "8");
   await frame();
   const added = await page.evaluate(() => { const t = window.dial_tool, lines = [...document.querySelectorAll("#guide-list .guidekind.added")]; return [t.S.gd_more.map((g) => g.kind).join(""), t.S.gd_more[0].a, t.S.gd_more[1].r, t.items.filter((i) => i.role === "guide").length, lines.length,
-    lines.every((l) => Math.round(l.getBoundingClientRect().height) === 30 && l.querySelector(".dots > :first-child").classList.contains("remove") && !l.querySelector(".none")), lines.map((l) => l.querySelector(".name").scrollWidth <= l.querySelector(".name").clientWidth).join(" ")]; });
+    lines.every((l) => Math.round(l.getBoundingClientRect().height) === 30 && l.querySelector(".gdot") && l.querySelector(".gchev")), lines.map((l) => l.querySelector(".name").scrollWidth <= l.querySelector(".name").clientWidth).join(" ")]; });
   await shot("4c20-guides");
-  await page.click("#guide-more-1-remove");
+  { // dragged on the preview (#527; Okay, 24 Oct 2026: "Both"): each added guide has a handle in its colour while the list is open; dragged, its numbers follow and the list stays
+    const on = await S("S.guides"); if (!on) await page.click("#guides");
+    const hs = await page.$$eval(".handles [data-more]", (h) => h.map((g) => { const r = g.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }));
+    const drag = async ([x, y], dx, dy) => { await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x + dx / 2, y + dy / 2, { steps: 4 }); await page.mouse.move(x + dx, y + dy, { steps: 4 }); await page.mouse.up(); await frame(); };
+    const was = await S("JSON.stringify(S.gd_more)");
+    const free = await page.evaluate((hs) => hs.map(([x, y]) => !!document.elementFromPoint(x, y)?.closest(".handles [data-more]")), hs);      // the ones not under the list
+    if (free[1]) await drag(hs[1], -40, 30);
+    if (free[2]) await drag(hs[2], 40, 40);
+    const now = await page.evaluate(() => { const t = window.dial_tool; return [t.S.gd_more[1].a, t.S.gd_more[2].r, document.querySelector("#guide-more-1-a").value, !document.querySelector("#guide-list").hidden]; });
+    const w = JSON.parse(was);
+    check(hs.length === 3 && free[1] && free[2] && now[0] !== w[1].a && now[1] > w[2].r && now[2] === String(now[0]) && now[3], `an added guide is dragged on the preview by its handle: the crosshair moved to ${now[0]}°, the circle out to ${now[1]}; its numbers follow; the list stays open (${hs.length} handles, free ${free.join(" ")})`);
+    await page.evaluate((was) => { const t = window.dial_tool; t.S.gd_more = JSON.parse(was); t.sync_rows(); t.render(); }, was);
+    if (!on) await page.click("#guides");
+  }
+  await page.click("#guide-more-last");
   const left = await S("S.gd_more.map((g) => g.kind).join('')");
   await page.evaluate(() => { const t = window.dial_tool; t.S.gd_more = []; t.sync_rows(); t.render(); });
-  check(added[0] === "012" && added[1] === 45 && added[2] === 8 && added[4] === 3 && left === "02", `Add: Line · Crosshair · Circle put a guide of that kind in the list, with its angle or radius, its colours and a way to remove it (${added[3]} guides drawn)`);
-  check(added[5] && added[6] === "true true true", `an added guide is one line, 30 high: its name and values whole (${added[6]}), its colours, a cross in the none sign's place (#305, 4.45.3)`);
+  check(added[0] === "012" && added[1] === 45 && added[2] === 8 && added[4] === 3 && left === "01", `Add: Line · Crosshair · Circle put a guide of that kind under Added, with its angle or radius, its colour and its chevron; the minus takes the last added away (${added[3]} guides drawn; left ${left})`);
+  check(added[5] && added[6] === "true true true", `an added guide is one line, 30 high: its name and values whole (${added[6]}), its dot and its chevron (#305)`);
 }
-const list_look = await page.evaluate(() => { const c = getComputedStyle(document.querySelector("#guide-list")), on = getComputedStyle(document.querySelector("#guide-list .tone.on")); return [c.backgroundColor, parseFloat(c.borderTopLeftRadius), on.borderTopLeftRadius, on.boxShadow.split("rgb").length - 1]; });
-check(list_look[0] === "rgb(20, 20, 19)" && list_look[1] >= 12 && list_look[2] === "50%" && list_look[3] === 3, "the list is near black and round; the chosen colour is a disc in a thick ring of its own colour");
-await enter_value("#global-gd-w-Thickness", "3");
-await page.click("#guide-gd_axes");
+await page.click("#guide-gd_hole-colour");
+const list_look = await page.evaluate(() => { const c = getComputedStyle(document.querySelector("#guide-list")), on = getComputedStyle(document.querySelector("#guide-pop .tone.on")); return [c.backgroundColor, parseFloat(c.borderTopLeftRadius), on.borderTopLeftRadius, on.boxShadow.split("rgb").length - 1]; });
+await page.click("#guide-gd_hole-colour");
+check(list_look[0] === "rgb(20, 20, 19)" && list_look[1] >= 12 && list_look[2] === "50%" && list_look[3] === 1, "the list is near black and round; the chosen colour is a dot in a circle, its edge drawn in ink, concentric (#539: \"If something can be a circle, is\")");
+await page.click("#guide-w-3");
+await pop_pick("#guide-gd_axes", null);
 await frame();
-check(await S("t.items.filter((i) => i.role === 'guide' && i.px === 3).length > 0 && !t.items.some((i) => i.role === 'guide' && i.path.d.length === 2)"), "Guides: thickness 3, and None on centre lines takes them off the preview");
-check(await page.$eval("#guide-gd_axes", (e) => e.classList.contains("on")) && await page.$$eval('#guide-list .guidekind:has-text("Centre lines") .tone.on', (b) => b.length) === 0, "None wears the mark; no colour does");
-await page.click('#guide-list .guidekind:has-text("Centre lines") .tone >> nth=3');
+check(await S("t.items.filter((i) => i.role === 'guide' && i.px === 2.25).length > 0 && !t.items.some((i) => i.role === 'guide' && i.path.d.length === 2)"), "Guides: thickness 3 (three steps of 0.75), and None for the centre lines takes them off the preview");
+check(await page.$eval("#guide-gd_axes", (e) => e.closest(".guidekind").classList.contains("off")), "hidden, its line greyed and its dot an empty ring");
+await pop_pick("#guide-gd_axes-colour", 3);
 await frame();
 check(await S("S.gd_axes === true && S.gd_k_axes === 3"), "pressing a colour shows that kind again, in that colour");
-await page.click("#guide-gd_axes");
-await page.click('#guide-list .guidekind:has-text("Centre hole") .tone >> nth=0');
+await pop_pick("#guide-gd_axes", null);
+await pop_pick("#guide-gd_hole-colour", 0);
 await frame();
 const names = await page.$$eval("#guide-list .guidekind .name", (n) => n.map((e) => e.textContent));
 check(await S("S.gd_hole === true && S.gd_k_hole === 0") && !names.includes("Dial edge") && !names.includes("Window radii"), "a colour pressed is the centre hole's, the first of the eight; there is no dial edge nor window radii any more");
-// the last line (#271): Thickness, its number with a compact plus and minus, a rule, then Reset All — on one line
+// the foot (#539; Okay, 25 Oct 2026, his marks on the drawing): one ground, Add with three free pills, then Thickness 1 · 2 · 3
+// as a pill switch and Reset All a quiet word, every pill 20 high and ending on the lines' right edge
 {
-  const last = await page.evaluate(() => { const r = (s) => document.querySelector("#guide-list .guidelast " + s).getBoundingClientRect(), a = r("label"), b = r(".numbox"), c = r("#guides-reset"), d = getComputedStyle(document.querySelector("#guide-list .resetall")); return [Math.abs((a.top + a.bottom) / 2 - (c.top + c.bottom) / 2) < 1 && Math.abs((b.top + b.bottom) / 2 - (c.top + c.bottom) / 2) < 1, a.right <= b.left && b.right <= c.left, d.borderLeftWidth, document.querySelector("#guides-reset").textContent, !!document.querySelector("#guide-list .guidelast .numbox .step")]; });
-  check(last[0] && last[1] && last[2] === "1px" && last[3] === "Reset All" && last[4], `Thickness, its number with a compact plus and minus, a rule (${last[2]}) and Reset All stand on one line, in that order`);
-  const foot = await page.evaluate(() => { const list = document.querySelector("#guide-list"), f = list.querySelector(".guidelast"), r = f.getBoundingClientRect(), l = list.getBoundingClientRect(), c = getComputedStyle(f), rule = list.querySelector(".resetall").getBoundingClientRect(), s = getComputedStyle(list.querySelector(".resetall"));
-    list.scrollTop = list.scrollHeight; const r2 = f.getBoundingClientRect();
-    return [c.backgroundColor, c.boxShadow, Math.round(r2.bottom - (l.bottom - 1)), Math.round(r.left - (l.left + 1)), Math.round((l.right - 1) - r.right), Math.round(rule.top - r.top), Math.round(r.bottom - rule.bottom), s.borderLeftColor, getComputedStyle(list).backgroundColor]; });
-  check(foot[0] === "rgb(74, 74, 70)" && foot[1] === "none" && foot.slice(2, 7).every((v) => v === 0) && foot[7] === foot[8], `the bottom section (#305): filled with the line colour (${foot[0]}), no line over or under it, from edge to edge and down to the box's bottom; its rule the ground's colour, from its top to the bottom`);
-  await page.click("#guide-list .guidelast label");
-  const slider = await page.evaluate(() => { const e = document.querySelector("#value-pop"); return !!e && e.querySelector("label").textContent === "Thickness" && getComputedStyle(e.querySelector("input[type=range]")).display !== "none"; });
-  await page.keyboard.press("Escape");
-  check(slider && await page.$("#value-pop") === null && await page.isVisible("#guide-list"), "a press on Thickness opens its popup, its slider there (R15 form B, #271); Escape puts it away, the list stays");
+  const foot = await page.evaluate(() => { const list = document.querySelector("#guide-list"), f = list.querySelector(".guidesettings"), r = (s) => (typeof s === "string" ? f.querySelector(s) : s).getBoundingClientRect(), line = list.querySelector(".guidescroll .guidekind").getBoundingClientRect();
+    const add = r(".guidehead .name"), adds = [...f.querySelectorAll(".pillswitch.free > button")].map(r), th = r(".gthick"), tn = [...f.querySelectorAll(".gthick > button")], reset = r("#guides-reset"), label = r(".guidelast > label");
+    list.scrollTop = list.scrollHeight; const fr = f.getBoundingClientRect(), l = list.getBoundingClientRect();
+    return [getComputedStyle(f).backgroundColor, Math.round(fr.bottom - (l.bottom - 1)), Math.round(fr.left - (l.left + 1)), Math.round((l.right - 1) - fr.right), add.textContent === undefined, adds.length === 3 && adds.every((b) => Math.round(b.height) === 20) && Math.round(adds[2].right) === Math.round(line.right), Math.round(th.height) === 20 && Math.round(reset.right) === Math.round(line.right) && th.right <= reset.left && label.right <= th.left, Math.abs((label.top + label.bottom) / 2 - (th.top + th.bottom) / 2) < 1 && Math.abs((reset.top + reset.bottom) / 2 - (th.top + th.bottom) / 2) < 1, tn.map((b) => b.textContent).join(""), tn.filter((b) => b.classList.contains("on")).length, document.querySelector("#guides-reset").textContent, f.querySelector(".pillswitch.free") !== null && f.querySelector(".gthick").classList.contains("pillswitch"), adds.every((b) => Math.abs((b.top + b.bottom) / 2 - (add.top + add.bottom) / 2) < 1)]; });
+  check(foot[0] === "rgb(38, 38, 36)" && foot.slice(1, 4).every((v) => v === 0) && foot[5] && foot[6] && foot[7] && foot[8] === "123" && foot[9] === 1 && foot[10] === "Reset All" && foot[11] && foot[12],
+    `the foot: one ground, the night field (${foot[0]}), edge to edge and down to the box's bottom (${foot.slice(1, 4).join(" ")}); Add and its three free pills on one line; Thickness 1 · 2 · 3 a pill switch with the chosen one filled, Reset All a word, on one line; the pills 20 high and ending on the lines' right edge`);
+  await page.click("#guide-w-2");
+  check(await S("S.gd_w === 1.5") && await page.$eval("#guide-w-2", (b) => b.getAttribute("aria-checked") === "true"), "Thickness 2 is two steps, 1.5 (Okay, 24 Oct 2026: \"Steps of today's\")");
+  await page.click("#guide-w-3");
 }
 await shot("4c-guides");
 await page.click("#guides-reset");
 { // Reset All asks first (#271): the question in its line's place, round ✕ and ✓; ✕ keeps the guides, ✓ resets them
   const asked = await page.evaluate(() => { const q = document.querySelector("#guide-list .guidelast .ask"); return !!q && !q.hidden && q.textContent.includes("Reset all guides?") && [...q.querySelectorAll(".roundb")].every((b) => getComputedStyle(b).borderRadius === "50%"); });
   await page.click("#guides-reset-no");
-  const kept = await S("S.gd_k_hole === 0 && S.gd_w === 3");
+  const kept = await S("S.gd_k_hole === 0 && S.gd_w === 2.25");
   await page.click("#guides-reset"); await page.click("#guides-reset-yes");
   check(asked && kept, "Reset All asks first, in its line's place: \"Reset all guides?\", round ✕ and ✓; ✕ keeps the guides as they are");
 }
 await frame();
-check(await S("S.gd_axes === true && S.gd_k_axes === 0 && S.gd_hole === true && S.gd_k_hole === 1 && S.gd_rings === false && S.gd_sel === true && S.gd_wins === false && S.gd_wsel === true && S.gd_w === 1"), "Reset All: the guides as they start — centre hole cyan, centre lines pink, the selected ring's and the selected window's (Okay, 15–16 Oct 2026)");
+check(await S("S.gd_axes === true && S.gd_k_axes === 0 && S.gd_hole === true && S.gd_k_hole === 1 && S.gd_rings === false && S.gd_sel === true && S.gd_wins === false && S.gd_wsel === true && S.gd_w === 0.75"), "Reset All: the guides as they start — thinner (0.75; #485); centre hole cyan, centre lines pink, the selected ring's and the selected window's (Okay, 15–16 Oct 2026)");
 // the centre hole's guide shows while the hole is being sized, even with the guides off, then goes (#267)
 {
   await page.click("#guides");      // off
@@ -754,8 +821,9 @@ check(await S("!t.items.some((i) => i.role === 'guide')") && await page.isVisibl
 await page.mouse.move(640, 30);
 // the backdrop's colour as the browser spells a background (a labelled switch is filled with it: Okay, 15 Oct 2026, 07:07)
 const FILL = `(() => { const h = getComputedStyle(document.querySelector("main")).getPropertyValue("--canvas-fill").trim().replace("#", ""); const n = (i) => parseInt(h.length === 3 ? h[i] + h[i] : h.slice(2 * i, 2 * i + 2), 16); return \`rgb(\${n(0)}, \${n(1)}, \${n(2)})\`; })()`;
+await page.evaluate(() => window.dial_tool.words_unfold()); await frame();      // its word out, as after a press on the empty canvas (#518)
 const one_colour = await page.evaluate(`(() => { const c = (q) => getComputedStyle(document.querySelector(q)); return [c("#guides").color, c("#guides-more").color, c("#guides").borderTopColor, c("#guides").backgroundColor, c("#guides").borderTopStyle, document.querySelectorAll("#guides .slash, #guides .core-off").length, c("#guides").fontWeight, ${FILL}]; })()`);
-check(one_colour[0] === one_colour[1] && /0\.35\)$/.test(one_colour[2]) && one_colour[3] === one_colour[7] && one_colour[4] === "solid" && one_colour[5] === 0 && one_colour[6] === "400", `off, it is an outline filled with the backdrop's own colour (its words show); sign, word, arrow and line are one colour (${one_colour[0]}), the line at 0.35 of it (${one_colour[2]}); the sign is the one it has on, only fainter (Okay, 15 Oct 2026, 03:41)`);
+check(one_colour[0] === one_colour[1] && /0\.35\)$/.test(one_colour[2]) && one_colour[3] === one_colour[7] && one_colour[4] === "solid" && one_colour[5] === 0 && one_colour[6] === "400", `off, its word out, it is an outline filled with the backdrop's own colour; sign, word, arrow and line are one colour (${one_colour[0]}), the line at 0.35 of it (${one_colour[2]}); the sign is the one it has on, only fainter (Okay, 15 Oct 2026, 03:41)`);
 { // three states on the preview: can be pressed (faint) · can't (fainter) · on (Guides: its word alone whole)
   const o = (q) => page.$eval(q, (e) => getComputedStyle(e).opacity);
   const off = [await o("#guides .word"), await o("#guides svg"), await o("#backdrop span"), await o("#undo svg")];
@@ -764,7 +832,7 @@ check(one_colour[0] === one_colour[1] && /0\.35\)$/.test(one_colour[2]) && one_c
   await page.hover("#guides");
   const over = await page.$eval("#guides", (e) => getComputedStyle(e).borderTopColor);
   await page.click("#guides"); await page.mouse.move(640, 30);
-  check(off.join() === "0.35,0.35,0.35,0.35" && on[0] === "1" && on[1] === "1" && /0\.35\)$/.test(on[2]) && over === one_colour[0], `on the preview a switch is faint (${off[0]}); Guides on: its sign and word whole (15 Oct 2026), its line still faint; under the pointer the line is whole`);
+  check(off.join() === "0.35,0.35,0.35,0.35" && on[0] === "0.35" && on[1] === "1" && /0\.35\)$/.test(on[2]) && over === one_colour[0], `on the preview a switch is faint (${off[0]}); Guides on: its sign whole, its word still faint (Okay, 20 Oct 2026, 02:37: "when on, only the icon lights up"), its line still faint; under the pointer the line is whole`);
 }
 await page.mouse.click(640, 30);                      // the backdrop, off the dial
 check(await page.isHidden("#guide-list"), "a press outside the list puts it away");
@@ -779,7 +847,7 @@ await shot("4c3-guides-off");
 await page.click("#guides");
 await page.click("#guides-more");
 await page.mouse.move(900, 400);
-check(await S("S.guides === true && S.ui_section === 0") && await page.isHidden("#guide-list") && await page.evaluate(`(() => { const e = document.querySelector("#guides"), c = getComputedStyle(e); return (c.backgroundColor === ${FILL}) + c.color + c.fontWeight + getComputedStyle(e.querySelector(".word")).opacity + e.querySelectorAll(".slash").length; })()`) === "truergb(17, 17, 17)40010", "pressed again it is on: still only the backdrop's fill; the word whole, not bolder (Okay, 14 Oct 2026, 23:05), the sign whole");
+check(await S("S.guides === true && S.ui_section === 0") && await page.isHidden("#guide-list") && await page.evaluate(`(() => { const e = document.querySelector("#guides"), c = getComputedStyle(e); return (c.backgroundColor === ${FILL}) + c.color + c.fontWeight + getComputedStyle(e.querySelector(".word")).opacity + e.querySelectorAll(".slash").length; })()`) === "truergb(17, 17, 17)4000.350", "pressed again it is on: still only the backdrop's fill; the word not bolder (Okay, 14 Oct 2026, 23:05) and dim (20 Oct 2026, 02:37: only the icon lights up), the sign whole");
 // the backdrop's colour: a switch at the preview's bottom left, showing the colour as a chip
 const bd = await page.evaluate(() => { const b = document.querySelector("#backdrop").getBoundingClientRect(), m = document.querySelector("main").getBoundingClientRect(), c = getComputedStyle(document.querySelector("#backdrop")); const sh = document.querySelector("#shadows").getBoundingClientRect(), unit = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--unit")); const g = document.querySelector(".guides").getBoundingClientRect(); return [Math.round(sh.left - m.left), Math.round(m.bottom - sh.bottom), c.borderTopStyle, getComputedStyle(document.querySelector("#backdrop .dot")).getPropertyValue("--c"), Math.round(b.left - m.left), Math.round(sh.top - b.bottom - unit), Math.round(m.right - g.right)]; });
 check(bd[0] === 12 && bd[1] === 12 && bd[4] === 12 && bd[5] === 0 && bd[6] === 12 && bd[2] === "solid" && bd[3].includes("204, 204, 199"), "the Shadows switch is 12 from the preview's bottom left, the Backdrop switch a unit over it, solid-lined, its chip the backdrop's colour (4.59); Guides 12 from the top right (4.86)");
@@ -799,7 +867,7 @@ for (const grey of ["#808080", "#F2F2EE", "#141413", "#4B317F", "#C8E6A0", "#CC3
 await shot("4c4-guides-dark");
 await type_hex("global-c-backdrop-Backdrop", "#CCCCC7");
 // the Dial section: two panes, Dial (diameter, plate, background) and Page (margin, backdrop); no Guides pane
-check(JSON.stringify(await page.$$eval(".pinned .pane h2", (h) => h.map((x) => x.textContent))) === '["Dial","Page"]' && JSON.stringify(await page.$$eval(".form .pane h2", (h) => h.map((x) => x.textContent))) === '["Colours","Reset"]' && await page.isVisible("#background-add"), "Dial has four panes (Reset last since 4.41.25): Dial and Page stay in view, Colours scrolls under them; Background is a button");
+check(JSON.stringify(await page.$$eval(".pinned .pane h2", (h) => h.map((x) => x.textContent))) === '["Dial"]' && JSON.stringify(await page.$$eval(".form .pane h2", (h) => h.map((x) => x.textContent))) === '["Page","Colours","Reset"]' && await page.isVisible("#background-note") && !(await page.$("#background-add")), "Dial has four panes (Reset last since 4.41.25): Dial stays in view, Page and Colours scroll under it (Okay, 20 Oct 2026, 03:41: 'Page moves to gray area'); Background is a place made ready for an SVG, a note and no button (#530, #218)");
 // units: a box at the panel's top right; lengths are shown and typed in the unit, kept in mm
 // the unit box round its word's ink, 2 px all round and a line (#302): [word, width, height, from the column's end, the room
 // between its line and its letters — top, bottom, left, right — counted on its own picture, in px (a canvas's measure of
@@ -910,7 +978,7 @@ const row_line = await page.$eval(".form .colourlist .row", (e) => getComputedSt
 check(row_line.split("rgb(255, 255, 255)").length === 3, "every row has a white hairline before and after it, on the grey");
 const half_line = await page.$eval(".row:has(+ .row.nest)", (e) => { const c = getComputedStyle(e); return [c.boxShadow.split("rgb").length - 1, c.backgroundSize, c.backgroundPosition, e.querySelector("label").textContent]; });
 check(half_line[0] === 1 && half_line[1].startsWith("calc(66.6667% - 4px)") && half_line[2] === "100% 100%" && half_line[3] === "Diameter", "before a nested row stands a half line, from the controls' column to the right edge: Diameter draws it, over Scale everything with it");
-await page.click('.pinned .fold:has-text("Dial")');
+await page.click('.pinned .fold:has-text("Dial")', { position: { x: 60, y: 12 } });      // on its word: the plate's pill stands on the heading's middle (#533)
 check(await page.isHidden("#global-dial-d-Diameter") && await page.isVisible("#global-margin-Page-margin"), "a heading folds its own group only");
 check((await page.textContent('.pinned .fold:has-text("Dial") .summary')).includes("diameter 30.0"), "a folded pane says what it holds: diameter 30.0 …");
 await page.click('.pinned .fold:has-text("Dial") .eye');
@@ -926,10 +994,10 @@ await tab("Hands");
 // Hands: Hour · Minute · Seconds are tabs on top of the pinned part; the panes below are about the chosen hand
 const hand_tabs = await page.evaluate(() => { const p = document.querySelector(".pinned"), t = p.querySelector(".tabsbar"); return [p.firstElementChild.classList.contains("handsbar"), p.firstElementChild.nextElementSibling === t, [...t.querySelectorAll("button")].map((b) => b.textContent).join(" "), [...document.querySelectorAll(".form .pane h2")].map((h) => h.textContent).join(" · ")]; });
 check(hand_tabs[0] && hand_tabs[1] && hand_tabs[2] === "Hour Minute Seconds", "All hands is the first pinned line, the hand tabs the second, right above the hand's panes");
-const under_tab = (tab) => page.evaluate((tab) => { const box = document.querySelector(".form").firstElementChild, c = box.querySelector(".check").getBoundingClientRect(), t = document.querySelector(tab).getBoundingClientRect(), p = document.querySelector(".pinned").getBoundingClientRect();
+const under_tab = (tab) => page.evaluate((tab) => { const box = document.querySelector(".form").firstElementChild, c = box.querySelector(".showline").getBoundingClientRect(), t = document.querySelector(tab).getBoundingClientRect(), p = document.querySelector(".pinned").getBoundingClientRect();
   return (c.left - t.left).toFixed(1) + " " + (c.right - t.right).toFixed(1) + " " + (c.top - p.bottom).toFixed(1); }, tab);
 const tick_up = await page.evaluate(() => { const box = document.querySelector(".form").firstElementChild, pane = box.nextElementSibling;
-  return [box.classList.contains("showbox") && box.querySelector("input").id, box.textContent.trim(), pane.classList.contains("headless") && pane.querySelector(".fold").hidden && getComputedStyle(pane).borderTopWidth === "0px", getComputedStyle(box.querySelector(".check")).backgroundColor !== getComputedStyle(document.querySelector(".form")).backgroundColor, [...pane.querySelectorAll(".body .check")].every((c) => !c.checkVisibility())]; });      // (the cap's "Cap on this hand" waits there, hidden: #262)
+  return [box.classList.contains("showbox") && box.querySelector("input").id, box.querySelector(".check").textContent.trim(), pane.classList.contains("headless") && pane.querySelector(".fold").hidden && getComputedStyle(pane).borderTopWidth === "0px", getComputedStyle(box.querySelector(".showline")).backgroundColor !== getComputedStyle(document.querySelector(".form")).backgroundColor, [...pane.querySelectorAll(".body .check")].every((c) => !c.checkVisibility())]; });      // (the cap's "Cap on this hand" waits there, hidden: #262)
 // the Show tick fills its box, the box as it is (design canon §6; Okay, 19 Oct 2026: "'Show tick' in white gets bigger, black box stays the same")
 const show_tick = await page.evaluate(() => { const i = document.querySelector(".showbox input"), c = getComputedStyle(i), b = getComputedStyle(i, "::before"); return [parseFloat(c.width), parseFloat(b.width)]; });
 check(show_tick[0] === 9 && Math.abs(show_tick[1] - 6.25) < 0.1, `the Show box ${show_tick[0]} square, its tick ${show_tick[1]} (the box less half a unit; 3.5 before)`);
@@ -937,7 +1005,7 @@ await page.click("#hand-tab-0");
 const show_under = [await under_tab("#hand-tab-0")];
 await page.click("#hand-tab-2"); show_under.push(await under_tab("#hand-tab-2")); await page.click("#hand-tab-0");
 // under the box a thin black line opens the hand's pane, from where the tabs start; the hand's box starts there too, its top on the first row's line (Okay, on 4.46.1: "Blue lines, align, black line, new black line, thin")
-const opened = await page.evaluate(() => { const pane = document.querySelector(".form > .pane.headless"), c = getComputedStyle(pane), d = document.querySelector("#hand-detail").getBoundingClientRect(), t = document.querySelector(".tabsbar .segs").getBoundingClientRect(), rows = [...document.querySelectorAll(".form > .pane.headless .row.side:not([hidden])")], row = rows[0].getBoundingClientRect(), last = rows.at(-1).getBoundingClientRect(), box = document.querySelector(".form > .showbox > .check").getBoundingClientRect(), p = pane.getBoundingClientRect();
+const opened = await page.evaluate(() => { const pane = document.querySelector(".form > .pane.headless"), c = getComputedStyle(pane), d = document.querySelector("#hand-detail").getBoundingClientRect(), t = document.querySelector(".tabsbar .segs").getBoundingClientRect(), rows = [...document.querySelectorAll(".form > .pane.headless .row.side:not([hidden])")], row = rows[0].getBoundingClientRect(), last = rows.at(-1).getBoundingClientRect(), box = document.querySelector(".form > .showbox > .showline").getBoundingClientRect(), p = pane.getBoundingClientRect();
   return [c.backgroundImage.includes("linear-gradient") && c.backgroundSize.endsWith(" 1px"), (d.left - t.left).toFixed(1), (d.top - (row.top - 1)).toFixed(1), (d.bottom - last.bottom).toFixed(1), (p.top - box.bottom).toFixed(1) + "/" + (row.top - 1 - (p.top + 1)).toFixed(1)].join(" "); });      // over the line: from the box to its top edge; under it: from its foot to the first row's white line
 check(/^true 0\.0 0\.0 0\.0 (\S+)\/\1$/.test(opened), `under the Show box a thin black line opens the hand's pane, as far under the box as the rows are under it (${opened.split(" ").at(-1)}); the hand's box starts where the tabs do, from the first row's line to the last row's foot (4.46.4: "Enlarge the preview to fit the area")`);
 check(tick_up[0] === "hand-on-Show" && tick_up[1] === "Show" && tick_up[2] && tick_up[3] && tick_up[4] && show_under.every((u) => u === "0.0 0.0 0.0"), `the Show box (#261; 4.46.2): it grows down from the chosen tab, as wide as it, and goes with it (Hour, Seconds: ${show_under.join(" · ")}); a ground of its own, it holds Show; the hand's pane under it has no name line and no thick line`);
@@ -1052,12 +1120,13 @@ await page.click("#hand-tab-0");
   check(hole.includes("Marker · Hole · Hole length · Hole width · ") && hole.includes("Inside the disc · Round ends") && mark.includes("Marker · Mark · Mark length · Mark width · Mark ink · ") && as === 1,
     `a disc's marker is a Hole or a Mark; its rows say which (${mark.split(" · ").slice(3, 8).join(" · ")}), and a mark has its colour (#300)`);
 }
-{ // one line through the top: the middle of the title's small letters, undo and Guides; the unit box's and the Gallery pill's words on the title's baseline, as Help's are (Okay, 16 Oct 2026, #285: "same baseline")
+{ // the top: undo and Guides as far from the canvas's top as from its side, their bottom on the title's line (Okay, 21 Oct 2026, 23:29); the title's small letters centred in its row; the unit box's and the Gallery pill's words on the title's baseline, as Help's are (#285: "same baseline")
   const line = await page.evaluate(() => { const mid = (q) => { const r = document.querySelector(q).getBoundingClientRect(); return r.top + r.height / 2; }, h = document.querySelector("h1");
     const base_of = (e) => { const probe = document.createElement("span"); probe.style.cssText = "display:inline-block;width:0;height:0"; e.append(probe); const y = probe.getBoundingClientRect().top; probe.remove(); return y; };
     const base = base_of(h), c = getComputedStyle(h), pen = document.createElement("canvas").getContext("2d"); pen.font = `${c.fontWeight} ${c.fontSize} ${c.fontFamily}`;
-    return { mids: [base - pen.measureText("x").actualBoundingBoxAscent / 2, mid("#undo"), mid("#guides")], bases: [base, base_of(document.querySelector(".mast .help")), base_of(document.querySelector("#unit")), base_of(document.querySelector("#to-gallery"))] }; });
-  check(line.mids.every((y) => Math.abs(y - line.mids[0]) < 0.6) && line.bases.every((y) => Math.abs(y - line.bases[0]) < 0.6), `the title's small letters, undo and Guides are centred on one line (${line.mids.map((y) => +y.toFixed(1)).join(" · ")}); Help's, the unit box's and the Gallery pill's words stand on the title's baseline (${line.bases.map((y) => +y.toFixed(1)).join(" · ")})`);
+    const R = (q) => document.querySelector(q).getBoundingClientRect(), m = R("main"), tabs = R(".tabs"), hd = R(".panel > header");
+    return { mids: [base - pen.measureText("x").actualBoundingBoxAscent / 2, hd.top + hd.height / 2], gaps: [R("#undo").left - m.left, R("#undo").top - m.top, R("#guides").top - m.top], bottoms: [tabs.top + 1, R("#undo").bottom, R("#guides").bottom], bases: [base, base_of(document.querySelector(".mast .help")), base_of(document.querySelector("#unit")), base_of(document.querySelector("#to-gallery"))] }; });
+  check(Math.abs(line.mids[0] - line.mids[1]) < 0.6 && line.gaps.every((g) => Math.abs(g - line.gaps[0]) < 0.6) && line.bottoms.every((y) => Math.abs(y - line.bottoms[0]) < 0.6) && line.bases.every((y) => Math.abs(y - line.bases[0]) < 0.6), `undo and Guides as far from the canvas's top as from its side (${line.gaps.map((y) => +y.toFixed(1)).join(" · ")}), their bottom on the title's line (${line.bottoms.map((y) => +y.toFixed(1)).join(" · ")}); the title's small letters centred in its row (${line.mids.map((y) => +y.toFixed(1)).join(" · ")}); Help's, the unit box's and the Gallery pill's words stand on the title's baseline (${line.bases.map((y) => +y.toFixed(1)).join(" · ")})`);
 }
 { // the line between All hands and the hand tabs starts and ends where the tabs do (Okay, 16 Oct 2026, #260)
   await tab("Hands");
@@ -1067,10 +1136,9 @@ await page.click("#hand-tab-0");
   check(Math.abs(l.line[0] - l.tabs[0]) < 0.6 && Math.abs(l.line[1] - l.tabs[1]) < 0.6 && l.border === "rgba(0, 0, 0, 0)", `the line under All hands runs where the tabs run (${l.line.join("–")} · ${l.tabs.join("–")})`);
 }
 await shot("4g-hand-tabs");
-{ // 10:10 stands on its own thick line, its middle bottom on the line's top (Okay, 15 Oct 2026, 00:51; over the bar, clear of the ruler, before)
-  const p = await page.evaluate(() => { const r = (q) => document.querySelector(q).getBoundingClientRect(), pill = r(".steps12 .special"), line = r(".ruler .pose");
-    return [Math.round((line.top - pill.bottom) * 10) / 10, Math.round((pill.left + pill.width / 2 - (line.left + line.width / 2)) * 10) / 10, getComputedStyle(document.querySelector(".ruler .pose")).strokeWidth, document.elementFromPoint(pill.left + pill.width / 2, pill.top + pill.height / 2).textContent]; });
-  check(Math.abs(p[0]) <= 0.5 && Math.abs(p[1]) <= 1 && p[2] === "3px" && p[3] === "10:10", `10:10 sits on its thick line (gap ${p[0]}, off its middle ${p[1]}, line ${p[2]} wide), and can be pressed there`);
+{ // the timeline has the twelve hours and nothing else (Okay, 23 Oct 2026: "10:10 was a good joke while it lasted. Let's remove it from the timeline")
+  const p = await page.evaluate(() => [document.querySelectorAll(".steps12 button").length, document.querySelectorAll(".steps12 .special, .ruler .pose").length]);
+  check(p[0] === 12 && p[1] === 0, `the day's steps are the twelve hours (${p[0]}); no 10:10, no line of its own`);
 }
 // Windows: four cards, 12 · 3 · 6 · 9, are the tabs; Show this window is on the heading line, also when the pane is folded
 await tab("Date");
@@ -1080,7 +1148,7 @@ check(cards.map((c) => c[1]).join("") === "" && cards.map((c) => c[0]).join(" ")
 {
   const was = await S("JSON.stringify([S.ui_window, S.da_on, S.da_at, S.da_shape, S.da_turn, S.da_ps, S.da_family, S.da_text_c, S.da_disc_c, S.da_w])");
   await page.evaluate(() => { const t = window.dial_tool; t.S.ui_window = 0; t.set_value("window", "on", true); t.sync_rows(); });
-  const tiles = await page.$$eval('[id^="window-shape-"]', (b) => b.map((x) => [x.title, x.classList.contains("on")]));
+  const tiles = await page.$$eval('[id^="window-shape-"]', (b) => b.filter((x) => !x.hidden).map((x) => [x.title, x.classList.contains("on")]));
   const box = async () => { await frame(); return page.evaluate(() => { const b = window.dial_tool.statik.windows[0].window.bounds(); return [+(b[2] - b[0]).toFixed(3), +(b[3] - b[1]).toFixed(3)]; }); };
   const rect = await box();
   await page.click("#window-shape-circle");
@@ -1089,11 +1157,13 @@ check(cards.map((c) => c[1]).join("") === "" && cards.map((c) => c[0]).join(" ")
   const polygon = [await box(), await page.isVisible("#window-sides-Sides"), await page.isVisible("#window-round-Corner")];
   await page.click("#window-shape-arc");
   const arc = [await box(), await page.isHidden("#window-turn-Turn-it-with-its-radius")];
-  await page.click("#window-shape-arch");
-  const arch = await box();
   await page.click("#window-shape-rectangle");
-  check(tiles.map((t) => t[0]).join(" ") === "rectangle circle polygon arch arc" && tiles[0][1] && Math.abs(circle[0][0] - circle[0][1]) < 0.01 && circle[1] && circle[2] && polygon[1] && polygon[2] && arc[1] && arc[0][0] !== rect[0] && arch[1] < arch[0] && await S("S.da_shape") === 1,
-    `Shape: five buttons, a date window starts as a rectangle (${rect.join(" × ")}); circle ${circle[0].join(" × ")}, polygon with Sides and Corner, arc ${arc[0].join(" × ")} (no turning), arch ${arch.join(" × ")}`);
+  // a kind's own shape stands fourth, for its kind alone (Okay, 20 Oct 2026, 01:16: "Am/pm window should come selected as a shape instead of moon window. moon window button only active with moon selected, absent from others")
+  const own_shape = async (kind) => { await page.evaluate((k) => { const t = window.dial_tool; t.set_value("window", "kind", k); t.set_value("window", "shape", 0); t.sync_rows(); }, kind); return page.$$eval('[id^="window-shape-"]', (b) => b.filter((x) => !x.hidden).map((x) => x.title + (x.classList.contains("on") ? "*" : "")).join(" ")); };
+  const kinds = [await own_shape(3), await own_shape(2)];
+  await page.evaluate(() => { const t = window.dial_tool; t.set_value("window", "kind", 0); t.set_value("window", "shape", 1); t.sync_rows(); });
+  check(tiles.map((t) => t[0]).join(" ") === "rectangle circle polygon arc" && tiles[0][1] && Math.abs(circle[0][0] - circle[0][1]) < 0.01 && circle[1] && circle[2] && polygon[1] && polygon[2] && arc[1] && arc[0][0] !== rect[0] && kinds[0] === "rectangle circle polygon arch* arc" && kinds[1] === "rectangle circle polygon half* arc" && await S("S.da_shape") === 1,
+    `Shape: a date window's four buttons, starting as a rectangle (${rect.join(" × ")}); circle ${circle[0].join(" × ")}, polygon with Sides and Corner, arc ${arc[0].join(" × ")} (no turning); a kind's own shape fourth and chosen, for it alone: ${kinds.join(" · ")}`);
   { // a window's place (#264, 4.46.1): on its pane's heading line, round buttons 3 · 6 · 9 · 12 · ··· spread from the
     // controls' column to the end, as the shapes on the Shape line are; the heading says Position under its title;
     // the dots open every place as a button and a field for any time
@@ -1176,8 +1246,8 @@ check(cards.map((c) => c[1]).join("") === "" && cards.map((c) => c[0]).join(" ")
   await shot("4c18-window-colours");
   check(/Window at [^·]+ · Shape · Font$/.test((await page.$$eval(".form .pane h2", (h) => h.map((x) => x.textContent))).join(" · ")) && await page.evaluate(() => { const rows = [...document.querySelectorAll(".form .pane .body")][0].children, ids = [...rows].filter((r) => r.offsetParent).map((r) => (r.querySelector("select, input, button") || {}).id); return ids[0] === "window-kind-Complication-0" && !!document.querySelector(".form .pane:first-of-type > .circles #window-at-Position-0"); })
     && await page.$eval("#window-r-Radius", (e) => e.closest(".pane").querySelector("h2").textContent) === "Shape" && await page.$eval("#window-clear-Clearance", (e) => e.closest(".pane").querySelector("h2").textContent) === "Shape" && await page.$eval("#window-frame-Frame-width", (e) => e.closest(".pane").querySelector("h2").textContent) === "Shape"
-    && await page.isVisible("#window-font-c") && await page.isHidden("#window-text-c-Picture") && await page.isVisible("#window-disc-c-Disc-under-it") && await page.isVisible("#window-ink-Frame") && await page.$eval("#window-ink-Frame", (e) => e.closest(".row") !== document.querySelector("#window-disc-c-Disc-under-it").closest(".row") && e.closest(".row").previousElementSibling === document.querySelector("#window-disc-c-Disc-under-it").closest(".row")),
-    "Windows (#263, 4.46.1): Window at x holds Position (on its heading line) and Complication; Shape holds Radius, the sizes, the colours one to a line as elsewhere (the disc under it, the frame, and the picture's for a window that shows one; Okay, 19 Oct 2026), Frame and Clearance, then the ticks (#413); the text and its font in a Font pane of their own (#415: \"Font needs own section & eye\")");
+    && await page.isVisible("#window-font-c") && await page.isHidden("#window-text-c-Picture") && await page.isVisible("#window-disc-c-Disc-under-it") && await page.isVisible("#window-ink-Frame") && await page.$eval("#window-ink-Frame", (e) => e.closest(".row") !== document.querySelector("#window-disc-c-Disc-under-it").closest(".row") && e.closest(".row").nextElementSibling === document.querySelector("#window-disc-c-Disc-under-it").closest(".row")),
+    "Windows (#263, 4.46.1): Window at x holds Position (on its heading line) and Complication; Shape holds Radius, the sizes, the colours one to a line as elsewhere (the frame first, #487, then the disc under it, and the picture's for a window that shows one; Okay, 19 Oct 2026), Frame and Clearance, then the ticks (#413); the text and its font in a Font pane of their own (#415: \"Font needs own section & eye\")");
   await page.evaluate((was) => { const t = window.dial_tool, [ui, on, at, shape, turn, ps, family, text_c, disc_c, w] = JSON.parse(was); Object.assign(t.S, { da_at: at, da_shape: shape, da_turn: turn, da_ps: ps, da_family: family, da_text_c: text_c, da_disc_c: disc_c, da_w: w, da_text_turn: true, da_on: on, ui_window: ui }); t.static_dirty = true; t.sync_rows(); t.render(); }, was);
 }
 // an am · pm window follows the time shown: light at 10 in the morning, dark at 10 at night; AM · PM stands in the time's box
@@ -1209,8 +1279,8 @@ await page.click("#window-card-2");
 check(await S("S.ui_window === 2 && S.windows[1].at === 2 && S.windows[1].on === false") && await page.$$eval(".form .pane", (p) => p.filter((e) => e.offsetParent).length) === 0 && await page.isVisible("#window-on-Show") && await page.$eval("#window-card-2", (e) => e.classList.contains("on") && e.classList.contains("off")), "the card at 6 chooses its window; not in use yet, it takes the card's place and the tab is empty under its Show (#416: \"Do not show window at … unless show is turned on\")");
 await page.evaluate(() => window.dial_tool.set_value("window", "on", true));      // shown: its pane under the Show box
 check(await page.textContent(".form .pane >> nth=0 >> h2") === "Window at 6", "shown, the pane says Window at 6");
-const on_box = await page.evaluate(() => { const box = document.querySelector(".form").firstElementChild, c = box.querySelector(".check").getBoundingClientRect(), t = document.querySelector(".windowcards .card > .tab.on").getBoundingClientRect(); return [box.classList.contains("showbox"), box.querySelector("input").id, box.nextElementSibling.querySelector("h2").textContent, !document.querySelector(".form .pane .headcontrol input"), (c.left - t.left).toFixed(1) + " " + (c.right - t.right).toFixed(1)]; });
-const win_gap = await page.evaluate(() => { const box = document.querySelector(".form > .showbox > .check").getBoundingClientRect(), pane = document.querySelector(".form > .showbox + .pane").getBoundingClientRect(); return +(pane.top - box.bottom).toFixed(1); });
+const on_box = await page.evaluate(() => { const box = document.querySelector(".form").firstElementChild, c = box.querySelector(".showline").getBoundingClientRect(), t = document.querySelector(".windowcards .card > .tab.on").getBoundingClientRect(); return [box.classList.contains("showbox"), box.querySelector("input").id, box.nextElementSibling.querySelector("h2").textContent, !document.querySelector(".form .pane .headcontrol input"), (c.left - t.left).toFixed(1) + " " + (c.right - t.right).toFixed(1)]; });
+const win_gap = await page.evaluate(() => { const box = document.querySelector(".form > .showbox > .showline").getBoundingClientRect(), pane = document.querySelector(".form > .showbox + .pane").getBoundingClientRect(); return +(pane.top - box.bottom).toFixed(1); });
 check(win_gap === 5.5, `under the window's Show box its pane's heading stands a unit below (${win_gap}; Okay, 19 Oct 2026, 20:37: "closer")`);
 check(on_box[0] && on_box[1] === "window-on-Show" && on_box[2] === "Window at 6" && on_box[3] && on_box[4] === "0.0 0.0", `Show stands in the Show box under the chosen card, as wide as it (${on_box[4]}), over the window's pane (#261; 4.46.2): the cards are tabs only`);
 await page.click(".form .pane >> nth=0 >> .fold h2");
@@ -1307,7 +1377,7 @@ await page.click("#pop-as-HEX"); await enter_value("#pop-hex", "ede8db");
 check(JSON.stringify(await S("S.c_plate.map((v) => Math.round(v * 255))")) === "[237,232,219,255]", "a typed value sets it too");
 await page.click("#global-c-plate-Plate");
 await shot("4c2-colour");
-check(await page.$$eval(".tabs button", (b) => b.map((x) => x.textContent.trim()).join(" ")) === "Dial Rings Hands Windows Export" && await page.$("main button.guidesbox#guides svg") !== null, "tabs: Export last; Guides is a rounded switch with a bullseye at the top right");
+check(await page.$$eval(".tabs button", (b) => b.filter((x) => !x.hidden).map((x) => x.textContent.trim()).join(" ")) === "Dial Rings Hands Windows Export" && await page.$("main button.guidesbox#guides svg") !== null, "tabs: Export last; Guides is a rounded switch with a bullseye at the top right");
 
 { // no two parts of the window share an id (a label's for, a test's #id find the first; 4.45.2 had two window-w-Width)
   const twice = await page.evaluate(() => { const n = {}; for (const e of document.querySelectorAll("[id]")) if (e.id) n[e.id] = (n[e.id] || 0) + 1; return Object.keys(n).filter((k) => n[k] > 1); });
@@ -1371,22 +1441,23 @@ await click_mm(...clock(10, 120));
 check(await page.$$eval(".form .fontrow", (rows) => rows.length) === 1 && await page.$$eval(".form select#font-family", (e) => e.length) === 0, "Type shows one font, the selected one, and no dropdowns");
 await page.click("#font-current");
 const sheet_at = await page.$eval("#font-picker", (d) => { const r = d.getBoundingClientRect(), m = document.querySelector("main").getBoundingClientRect(); const c = getComputedStyle(d), p = document.querySelector(".panel").getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width - p.width), Math.round(r.right - m.left), c.boxShadow !== "none", !document.querySelector("#font-done")].join(" "); });
-check(await page.$eval("#font-picker", (d) => d.open) && sheet_at === "184 64 -1 183 true true" && await page.$eval("#font-picker", (d) => Math.round(document.querySelector(".bar").getBoundingClientRect().top - d.getBoundingClientRect().bottom) === 34 && document.activeElement !== document.querySelector("#font-find") && document.querySelector("#font-find").closest("header") !== null), `pressing it opens the font sheet: floating over the panel, from the line under the panel's title down to one row above the bar (Okay: "window starts here"; "bottom shrinks"), its left edge on the panel's third column, as wide as the panel less its edge line, with a shadow; no Done button; Find a font is on its top line and waits for a press (${sheet_at})`);
+const sheet_foot = await page.$eval("#font-picker", (d) => [Math.round(document.querySelector(".bar").getBoundingClientRect().top - d.getBoundingClientRect().bottom), document.querySelector(".bar").getBoundingClientRect().top, d.getBoundingClientRect().bottom, getComputedStyle(document.documentElement).getPropertyValue("--bar-height"), document.activeElement !== document.querySelector("#font-find"), document.querySelector("#font-find").closest("header") !== null, document.activeElement && (document.activeElement.id || document.activeElement.className)]);
+check(await page.$eval("#font-picker", (d) => d.open) && sheet_at === "184 43 -1 183 true true" && Math.abs(sheet_foot[0] - 34) <= 1 && sheet_foot[4] && sheet_foot[5]      /* ±1: the bar's top lands on 837 or 838 from run to run, a half-pixel rounded (24 Oct 2026, seen three times) */, `pressing it opens the font sheet: floating over the panel, from the line under the panel's title down to one row above the bar (Okay: "window starts here"; "bottom shrinks"), its left edge on the panel's third column, as wide as the panel less its edge line, with a shadow; no Done button; Find a font is on its top line and waits for a press (${sheet_at} · foot ${sheet_foot.join(' ')})`);
 {
   const row = await page.evaluate(() => { const rows = [...document.querySelectorAll("#font-picker .fontrow")], x = (e) => Math.round(e.getBoundingClientRect().left), by = (f) => rows.find((r) => r.dataset.family === f);
-    return { names: new Set(rows.map((r) => x(r.querySelector(".name")))).size, numerals: new Set(rows.map((r) => x(r.querySelector(".sample")))).size, order: rows.every((r) => x(r.querySelector(".name")) < x(r.querySelector(".sample")) && x(r.querySelector(".sample")) < x(r.querySelector(".has"))), drawn: by("Jost").querySelector(".name svg path") !== null, barlow: [...by("Barlow").querySelectorAll(".sticker")].map((e) => e.textContent + "/" + e.className.split(" ")[1]).join(" "), archivo: [...by("Archivo").querySelectorAll(".sticker")].map((e) => e.textContent + "/" + e.className.split(" ")[1]).join(" "), sticker: (() => { const c = getComputedStyle(by("Archivo").querySelector(".sticker.weight")), d = getComputedStyle(by("Archivo").querySelector(".sticker.width")); return [c.fontFamily.includes("Silkscreen"), c.fontSize, c.backgroundColor !== d.backgroundColor, c.borderTopLeftRadius].join(" "); })(), two_lines: rows.filter((r) => r.dataset.group === "list" && r.querySelector(".has").getBoundingClientRect().height > 20).map((r) => r.dataset.family).join(), one_line: by("Arimo").querySelector(".has").getBoundingClientRect().height < 30 && by("Routed Gothic").querySelector(".has").getBoundingClientRect().height < 30 && rows.every((r) => r.dataset.group !== "list" || r.querySelector(".has").getBoundingClientRect().height < 45), three: rows.filter((r) => r.querySelector(".has") && r.querySelector(".has").getBoundingClientRect().height >= 45).map((r) => r.dataset.family + " " + r.dataset.group).join(), sets: [...by("Cormorant").querySelectorAll(".sticker.sets")].map((e) => e.textContent).join(" | "), legend: [...document.querySelectorAll("#font-legend dt")].map((e) => e.textContent).join(" "), legend_at: (() => { const leg = document.querySelector("#font-legend"), b = document.querySelector("#font-legend-open"); if (!leg.hidden) return false; b.click(); const l = leg.getBoundingClientRect(), q = document.querySelector("#font-picker .squares").getBoundingClientRect(), shown = !leg.hidden && l.bottom <= q.top + 1 && b.getAttribute("aria-expanded") === "true"; b.click(); return shown && leg.hidden; })(), cut: rows.every((r) => { const sv = r.querySelector(".sample svg"); return !sv || Math.round(sv.getBoundingClientRect().height) === 25; }), fits: rows.every((r) => { const n = r.querySelector(".name"), g = n.querySelector("svg"); return !g || g.getBoundingClientRect().right <= n.getBoundingClientRect().right + 0.5; }), has: new Set(rows.map((r) => Math.round(r.querySelector(".has").getBoundingClientRect().width))).size, line: getComputedStyle(rows[0]).borderBottomColor === getComputedStyle(document.querySelector(".fontlist")).borderTopColor,
-      squares: [...document.querySelectorAll("#font-picker .squares .pickt")].filter((b) => b.offsetParent).map((b) => { const r = b.getBoundingClientRect(); return b.textContent + " " + (Math.round(r.height) <= 46); }).join(" · "), three: (() => { const a = [...document.querySelectorAll("#font-picker .adds > .pickt")].map((b) => b.getBoundingClientRect()), l = document.querySelector("#font-legend-open").getBoundingClientRect(), w = a.map((r) => Math.round(r.width)); return a.length === 3 && new Set(w).size === 1 && Math.abs(a[0].top - l.top) < 1 && getComputedStyle(document.querySelector("#font-picker .adds small")).display === "none"; })() }; });
+    return { names: new Set(rows.map((r) => x(r.querySelector(".name")))).size, numerals: new Set(rows.map((r) => x(r.querySelector(".sample")))).size, order: rows.every((r) => x(r.querySelector(".name")) < x(r.querySelector(".sample")) && x(r.querySelector(".sample")) < x(r.querySelector(".has"))), drawn: by("Jost").querySelector(".name svg path") !== null, barlow: [...by("Barlow").querySelectorAll(".sticker")].map((e) => e.textContent + "/" + e.className.split(" ")[1]).join(" "), archivo: [...by("Archivo").querySelectorAll(".sticker")].map((e) => e.textContent + "/" + e.className.split(" ")[1]).join(" "), sticker: (() => { const c = getComputedStyle(by("Archivo").querySelector(".sticker.weight")), d = getComputedStyle(by("Archivo").querySelector(".sticker.width")); return [c.fontFamily.includes("Silkscreen"), c.fontSize, c.backgroundColor !== d.backgroundColor, c.borderTopLeftRadius].join(" "); })(), two_lines: rows.filter((r) => r.dataset.group === "list" && r.querySelector(".has").getBoundingClientRect().height > 20).map((r) => r.dataset.family).join(), one_line: by("Arimo").querySelector(".has").getBoundingClientRect().height < 30 && by("Routed Gothic").querySelector(".has").getBoundingClientRect().height < 30 && rows.every((r) => r.dataset.group !== "list" || r.querySelector(".has").getBoundingClientRect().height < 45), three: rows.filter((r) => r.querySelector(".has") && r.querySelector(".has").getBoundingClientRect().height >= 45).map((r) => r.dataset.family + " " + r.dataset.group).join(), sets: [...by("Cormorant").querySelectorAll(".sticker.sets")].map((e) => e.textContent).join(" | "), legend: [...document.querySelectorAll("#font-legend dt")].map((e) => e.textContent).join(" "), legend_at: (() => { const leg = document.querySelector("#font-legend"), b = document.querySelector("#font-legend-open"); if (!leg.hidden) return false; b.click(); const l = leg.getBoundingClientRect(), q = document.querySelector("#font-picker .squares").getBoundingClientRect(), shown = !leg.hidden && l.bottom <= q.top + 1 && b.getAttribute("aria-expanded") === "true"; b.click(); return shown && leg.hidden; })(), cut: [...new Set(rows.map((r) => r.querySelector(".sample svg")).filter(Boolean).map((sv) => Math.round(sv.getBoundingClientRect().height)))].join(), fits: rows.every((r) => { const n = r.querySelector(".name"), g = n.querySelector("svg"); return !g || g.getBoundingClientRect().right <= n.getBoundingClientRect().right + 0.5 || Math.abs(g.getBoundingClientRect().width - parseFloat(g.style.minWidth)) < 0.5; }), has: new Set(rows.map((r) => Math.round(r.querySelector(".has").getBoundingClientRect().width))).size, line: getComputedStyle(rows[0]).borderBottomColor === getComputedStyle(document.querySelector(".fontlist")).borderTopColor,
+      squares: [...document.querySelectorAll("#font-picker .squares .pickt")].filter((b) => b.offsetParent).map((b) => { const r = b.getBoundingClientRect(); return b.textContent + " " + (Math.round(r.height) <= 46); }).join(" · "), adds: (() => { const a = [...document.querySelectorAll("#font-picker .adds > .pickt")].map((b) => b.getBoundingClientRect()), l = document.querySelector("#font-legend-open").getBoundingClientRect(), w = a.map((r) => Math.round(r.width)); return a.length === 2 && new Set(w).size === 1 && Math.abs(a[0].top - l.top) < 1 && getComputedStyle(document.querySelector("#font-picker .adds small")).display !== "none"; })() }; });
   check(row.names === 1 && row.numerals === 1 && row.order && row.drawn && row.line, "a line of the sheet: the family's name drawn in its own face at the left · its numerals, all starting on one line · what it has; a full line between two");
   check(row.barlow === "bold/weight tab/figure frac/figure 4 st/styles" && row.archivo === "w. 100–900/weight wd/width tab/figure old/figure zero/figure frac/figure" && row.sticker === "true 8px true 3px" && row.has === 1, `what a family has, as stickers in the pixel font, in short words (bold and italic whole), a colour for each kind, round corners: Barlow ${row.barlow}; Archivo ${row.archivo}; their column is one width (${row.sticker})`);
   check(row.one_line, `a row's stickers stand on one line where the column lets them, never three in the tool's own list (on two: ${row.two_lines || "none"}; three: ${row.three || "none"})`);
   check(row.sets === "12 ss | 5 cv", `a family's numbered sets and variants are two stickers at most, one colour (Cormorant: ${row.sets})`);
   check(row.legend === "w. 100–900 bold italic wd opt tab old zero frac 2 ss 5 cv 3 st" && row.legend_at, `a legend says what each sticker means: folded to a button beside the squares, it opens upwards over them (${row.legend})`);
-  check(row.cut, "numerals keep their size in every row: the wide ones are cut at their column's edge, none above");
-  check(row.fits, "every family's name fits its column: the long ones are drawn smaller");
-  check(row.squares === "Installed true · Add font link(gfonts, url) true · Add font file(woff, ttf, otf) true · Legend(OpenType abbr.) true" && row.three, `the buttons for adding a font: where the browser reads installed fonts, Installed first and the three sharing the first two columns on one line, without their second lines; short (no higher than 46); the legend's button in the third column (${row.squares})`);
+  check(row.cut === "33", `numerals keep their size in every row, bigger (Okay, 24 Oct 2026: "ENLARGE NUMS"): the wide ones are cut at their column's edge, none above (${row.cut} high)`);
+  check(row.fits, "every family's name fits its column: the long ones are drawn smaller, down to 70 % of their size, then cut (the law of the name column, 13 Oct 2026)");
+  check(row.squares === "Add font link(gfonts, url) true · Add font file(woff, ttf, otf) true · Legend(OpenType abbr.) true" && row.adds, `the buttons for adding a font: a link and a file, sharing the first two columns on one line with their second lines (Installed is a tab over the list, R35); short (no higher than 46); the legend's button in the third column (${row.squares})`);
   await page.keyboard.press("Escape");
-  { // the text's colour stands in the ring list's colour column; the name's whole line opens the sheet
-    const col = await page.evaluate(() => { const mid = (e) => { const r = e.getBoundingClientRect(); return r.left + r.width / 2; }; return [mid(document.querySelector(".ringline .colour")), mid(document.querySelector("#font-c")), document.querySelector("#font-c").getBoundingClientRect().right <= document.querySelector("#lang").getBoundingClientRect().left, document.querySelector("#font-name").getBoundingClientRect().right <= document.querySelector("#font-c").getBoundingClientRect().left + 0.5 && document.querySelector("#font-change") === null]; });
+  { // the text's colour, a pill with its hex (#408): its swatch stands in the ring list's colour column; the name's whole line opens the sheet
+    const col = await page.evaluate(() => { const mid = (e) => { const r = e.getBoundingClientRect(); return r.left + r.width / 2; }; return [mid(document.querySelector(".ringline .colour")), mid(document.querySelector("#font-c .dot")), document.querySelector("#font-c").getBoundingClientRect().right <= document.querySelector("#lang").getBoundingClientRect().left, document.querySelector("#font-name").getBoundingClientRect().right <= document.querySelector("#font-c").getBoundingClientRect().left + 0.5 && document.querySelector("#font-change") === null]; });
     const name = await page.$eval("#font-name", (e) => { const r = e.getBoundingClientRect(); return [r.right - 6, r.top + r.height / 2]; });
     await page.mouse.click(name[0], name[1]);
     const opened = await page.$eval("#font-picker", (d) => d.open);
@@ -1394,7 +1465,7 @@ check(await page.$eval("#font-picker", (d) => d.open) && sheet_at === "184 64 -1
     await page.click("#font-c");
     const colour_only = await page.$eval("#font-picker", (d) => !d.open) && await page.isVisible("#colour-pop");
     await page.keyboard.press("Escape"); await page.mouse.click(640, 30);
-    check(Math.abs(col[0] - col[1]) < 0.6 && col[2] && col[3], `the text's colour beside the font's name stands in the ring list's colour column (${col[0]} = ${col[1]}), before EN; the name runs up to it; no Change… (Okay's drawing, 18 Oct 2026)`);
+    check(Math.abs(col[0] - col[1]) < 0.6 && col[2] && col[3], `the text's colour beside the font's name, a pill with its hex, its swatch in the ring list's colour column (${col[0]} = ${col[1]}), before EN (#408); the name runs up to it; no Change… (Okay's drawing, 18 Oct 2026)`);
     check(opened && colour_only, "a press anywhere on the name's line opens the font sheet; a press on the colour opens the colour instead");
     await page.click("#font-name");
   }
@@ -1403,7 +1474,17 @@ check(await page.$eval("#font-picker", (d) => d.open) && sheet_at === "184 64 -1
   check(shut && await page.isVisible("#font-link") && await page.evaluate(() => document.activeElement.id === "font-link"), "the field for a link is out of sight until Add link is pressed; then it is there, with the keyboard in it");
 }
 { const fam = [await page.$$eval('#font-picker .fontrow[data-group="list"]', (rows) => rows.length), await page.$$eval('#font-picker .fontrow[data-group="list"] .sample svg path', (p) => p.length), await page.$$eval('#font-picker .fontrow[data-group="list"]', (rows) => rows.filter((r) => r.querySelectorAll(".sample svg path").length !== 1).map((r) => r.dataset.family + ":" + r.querySelectorAll(".sample svg path").length).join(" "))];
-  check(fam[0] === 42 && fam[1] === 42, `the sheet lists the tool's forty-two families (twenty-one until 4.46.7, #313), each showing numerals in its own outlines (${fam[0]} · ${fam[1]} ${fam[2]})`); }
+  const n = new Set((await import("../src/font_list.js")).FONT_LIST.map((f) => f.family)).size;
+  { // the filters (R35; Okay, 24 Oct 2026: "Pills inside a box that's attached to the search bar", "The tab can shrink and attach to lower window", "Any of them"): six pills, each as wide as its word, in a box hanging from Find down onto the list; each pressed adds its fonts
+    const rows = () => page.$$eval('#font-picker .fontrow[data-group="list"]', (r) => r.map((x) => x.dataset.family));
+    const all = (await rows()).length, tray = await page.evaluate(() => { const f = document.querySelector("#font-find").getBoundingClientRect(), l = document.querySelector("#font-picker .fontlist").getBoundingClientRect(), t = document.querySelector(".findtray").getBoundingClientRect(), w = [...document.querySelectorAll(".filterpill")].map((e) => Math.round(e.getBoundingClientRect().width)); return [Math.abs(t.top - f.bottom) < 1 && Math.abs(t.bottom - l.top) < 1, Math.abs(t.left - f.left) < 1 && Math.abs(t.right - f.right) < 1 && new Set(w).size > 3, [...document.querySelectorAll(".filterpill")].map((e) => e.textContent).join(" · ")]; });
+    await page.click("#font-filter-nonlatin"); const nl = await rows();
+    await page.click("#font-filter-serif"); const both = await rows();
+    await page.click("#font-filter-nonlatin"); await page.click("#font-filter-serif"); const back = (await rows()).length;
+    check(tray[0] && tray[1] && tray[2] === "Sans · Serif · Variable · Condensed · Mono · Non-Latin" && nl.length === 10 && nl.includes("Noto Serif SC") && both.length > nl.length && both.includes("Bodoni Moda") && back === all,
+      `the font filters: pills as wide as their words, in a box hanging from the search bar, as wide, down onto the list's line (${tray.join(" ")}); Non-Latin shows its ten, Serif added shows both (${both.length}); none pressed, every font again (${back})`);
+  }
+  check(fam[0] === n + 1 && fam[1] === n + 1 && n >= 69, `the sheet lists every one of the tool's ${n} families and Inter, the page's own (R35; #501: the middle tier and the non-Latin numeral fonts), each showing numerals in its own outlines (${fam[0]} · ${fam[1]} ${fam[2]})`); }
 await page.click('.fontrow[data-family="Jost"]');
 await page.waitForFunction(() => window.dial_tool.ring().ps === "Jost-Regular" && document.querySelector("#axis-wght"), null, { timeout: 8000 }).catch(() => {});
 check(await S("S.rings[S.ui_ring].ps === 'Jost-Regular'") && await page.$("#axis-wght") !== null && await page.$eval("#font-picker", (d) => !d.open), "click Jost: fetched and drawn, and the sheet closes (4.68; Okay, 18 Oct 2026, 22:35: \"Font window, selecting font closes window\"; it stayed open to compare until 4.67)");
@@ -1523,7 +1604,8 @@ await page.waitForFunction(() => window.dial_tool.ring().ps === "Barlow-Bold", n
 check(await S("S.rings[S.ui_ring].ps === 'Barlow-Bold'"), "Barlow's styles are buttons under the font: Bold");
 await page.click("#font-current");
 if (await page.evaluate(() => "queryLocalFonts" in window)) {
-  await page.click("#local-fonts");
+  check(await page.isVisible("#font-tab-1") && !(await page.$("#local-fonts")), "Installed is a tab over the list (R35), not a button at the foot");
+  await page.click("#font-tab-1");
   await page.waitForFunction(() => [...window.dial_tool.catalog.values()].some((f) => f.data), null, { timeout: 15000 }).catch(() => {});
   const listed = await S("[...t.catalog.values()].filter((f) => f.data).length");
   check(listed > 5, `Installed fonts: ${listed} listed`);
@@ -1533,6 +1615,11 @@ if (await page.evaluate(() => "queryLocalFonts" in window)) {
   await page.waitForFunction((f) => window.dial_tool.ring().family === f && window.dial_tool.statik, pick);
   await frame();
   check(await S("S.rings[S.ui_ring].family") === pick && !(await page.textContent("#font-note")).includes("stands in"), `Find narrows the list; a font installed on this computer (${pick}) draws the numerals`);
+  await page.click("#font-current"); await page.waitForTimeout(200);
+  const kept = await page.evaluate(() => [document.querySelector("#font-tab-1").classList.contains("on"), document.querySelector("#font-find").value, document.querySelector(".findtray").classList.contains("away"), [...document.querySelectorAll('#font-picker .fontrow')].every((r) => r.dataset.group === "computer")]);
+  await page.click("#font-tab-0"); await page.fill("#font-find", ""); await page.waitForTimeout(100);
+  const back = await page.evaluate(() => [document.querySelector(".findtray").classList.contains("away"), document.querySelectorAll('#font-picker .fontrow[data-group="computer"]').length]);
+  check(kept[0] && kept[1] === pick.slice(0, 6) && kept[2] && kept[3] && !back[0] && back[1] === 0, `the sheet opens again where it was left: the Installed tab, its search (${kept[1]}), no filters there, only this computer's fonts; Dial Tool's fonts brings the filters back and none of this computer's (R35)`);
 } else check(false, "this browser has no queryLocalFonts");
 await shot("6-local-font");
 await page.keyboard.press("Escape");
@@ -1554,9 +1641,13 @@ await frame();
 const spot2 = await page.evaluate(([x, y]) => { const t = window.dial_tool, r = t.svg.getBoundingClientRect(); return t.to_mm([x - r.left, y - r.top]); }, box);
 check(await S("t.z") > z0 * 1.5 && near(spot[0], spot2[0], 0.01) && near(spot[1], spot2[1], 0.01), "ctrl-scroll zooms, and the spot under the cursor stays put");
 await shot("7-zoomed");
-await page.mouse.wheel(40, 30);
+const z_before = await S("t.z");
+await page.mouse.wheel(0, 120);
 await frame();
-check(await S("t.fitted === false"), "two-finger scroll pans");
+const z_scrolled = await S("t.z");
+await page.mouse.move(box[0], box[1]); await page.mouse.down({ button: "right" }); await page.mouse.move(box[0] + 60, box[1] + 30, { steps: 4 }); await page.mouse.up({ button: "right" }); await frame();
+const c_moved = await S("t.fitted === false");
+check(z_scrolled < z_before && c_moved, `scroll zooms with no key (${z_before.toFixed(1)} → ${z_scrolled.toFixed(1)}), a right-button drag moves the dial (Okay, 23 Oct 2026: "Scroll to zoom in out, universal")`);
 await page.click("#fit");
 check(near(await S("t.z"), z0, 1e-6) && await S("t.fitted"), "Fit puts the whole page back");
 const t0 = await S("S.t");
@@ -1594,10 +1685,10 @@ await at_speed(60);
 const near60 = await S("t.speed");
 check(near60 > 55 && near60 < 70 && near60 !== 60 && /^\d+×$/.test(await page.getAttribute("#speed", "aria-valuetext")), `the speed slider is free between its ends (${near60.toFixed(1)}× near 60), and tells a screen reader (no words in the box since 15 Oct 2026)`);
 const ends = await page.$$eval(".humpname.end", (n) => n.map((e) => e.textContent + " " + getComputedStyle(e).color).join(" · "));
-const pill = await page.evaluate(() => { const c = (q) => getComputedStyle(document.querySelector(q)), r = c(".humpname.rider"), ten = c(".steps12 button.special"); return [r.backgroundColor === ten.backgroundColor, r.color === ten.color, r.fontWeight === ten.fontWeight, r.fontSize === ten.fontSize, r.height === ten.height, r.borderRadius === ten.borderRadius].every(Boolean); });
+const pill = await page.evaluate(() => { const r = getComputedStyle(document.querySelector(".humpname.rider")); return r.backgroundColor !== "rgba(0, 0, 0, 0)" && parseFloat(r.borderRadius) > 0; });
 await page.waitForTimeout(1000);
 check(ends === "0.1X rgb(115, 115, 115) · 720X rgb(115, 115, 115)" && pill && await page.$eval(".humpname.rider", (e) => e.textContent + " " + getComputedStyle(e).color) === Math.round(near60) + "X rgb(255, 255, 255)",
-  `its ends are named in the bar's grey (${ends}); while it is moved the speed over the thumb is a pill exactly like 10:10's (#283), then white again`);
+  `its ends are named in the bar's grey (${ends}); while it is moved the speed over the thumb is a pill (#283), then white again`);
 await at_speed(60);
 await page.click("#play");
 await page.waitForTimeout(600);
@@ -1623,11 +1714,9 @@ await page.click("#zoom-in");
 check(near(await S("t.z") / z1, 1.4, 0.01), "the + in the bar zooms in by 1.4");
 await page.click("#zoom-out");
 await page.click("#fit");
-// the day slider's steps: a click on a step, or on the slider near one, goes exactly there; 10:10 is one of them
+// the day slider's steps: a click on a step, or on the slider near one, goes exactly there
 await page.click('.steps12 button:has(.ink:text-is("3"))');
 check(await S("S.t === 3 * 3600") && await page.inputValue("#time") === "3:00:00", "the step 3 under the day slider: three o'clock sharp");
-await page.click(".steps12 button.special");
-check(await S("S.t === 10 * 3600 + 600") && await page.$eval(".steps12 button.special", (e) => e.classList.contains("on")), "the 10:10 step: ten past ten");
 const track = await page.$eval("#time-slider", (e) => { const r = e.getBoundingClientRect(); return [r.left, r.top + r.height / 2, r.width]; });
 const cut = 60 * +(await page.getAttribute(".ruler", "data-minutes"));
 check(cut < 3600 && await page.$$eval(".ruler path", (p) => p.length) >= 4, `the ruler cuts each hour (every ${cut / 60} minutes at this width)`);
@@ -1652,9 +1741,13 @@ check(pane_lines.length > 0 && pane_lines.every((x) => x === "24/26"), `a pane's
 // the bar keeps the columns: widths of one or two columns, and the Guides switch ends on the panel's last column
 const fits = await page.evaluate(() => { const w = (q) => Math.round(document.querySelector(q).getBoundingClientRect().width), r = (q) => Math.round(document.querySelector(q).getBoundingClientRect().right); const box = (q) => document.querySelector(q).getBoundingClientRect(), lead = document.querySelector(".bar .lead"), pad = parseFloat(getComputedStyle(lead).paddingRight);
     const gaps = [["#play", ".speeds"], [".speeds", ".timewell"], ["#date", "#now"]].map(([a, b]) => +(box(b).left - box(a).right).toFixed(1));
-    return { play: w("#play"), zooms: w("#zoom-out") + w("#zoom-in"), fit: w("#fit"), fitpad: getComputedStyle(document.querySelector("#fit")).paddingLeft === getComputedStyle(document.querySelector("#now")).paddingLeft && Math.abs(box("#fit").width - (box("#fit span").width + 2 * parseFloat(getComputedStyle(document.querySelector("#fit")).paddingLeft) + parseFloat(getComputedStyle(document.querySelector("#fit")).borderLeftWidth) + parseFloat(getComputedStyle(document.querySelector("#fit")).borderRightWidth))) < 0.5, sign: box(".zoomsign").right <= box(".zooms").left && Math.abs(box("#zoom-in").right - box("#fit").left) < 0.5 && document.querySelector("#fit svg") === null, gaps, touch: +(box("#ampm").left - box(".timewell").right).toFixed(1), half: [+box("#ampm").width.toFixed(1), +box("#ampm").height.toFixed(1), +((box("#ampm").top + box("#ampm").bottom) / 2 - (box(".timewell").top + box(".timewell").bottom) / 2).toFixed(1)], end: Math.round(box(".bar .lead").right - pad - box("#now").right) }; });
-check(fits.play === 34 && fits.zooms === 54 && fits.fitpad && fits.sign && fits.gaps[0] === 24 - 3.5 && fits.gaps[1] === fits.gaps[2] && fits.touch === 0 && fits.half[1] === 30 && Math.abs(fits.half[2]) < 0.5 && fits.end === 0,
-  `under the panel: play, a margin less what the speed box grew toward it (24 − 3.5, Okay 15 Oct 03:18), how fast · the time with AM · PM attached, as high, its word the time's size (#284, 4.44.6), then the date touching it (4.62) · NOW one equal gap apart, NOW ending on the panel's last column; at the right the magnifier first, then − + FIT side by side (notes 2, 18 Oct 2026), FIT a word with NOW's padding (#315) (${JSON.stringify(fits)})`);
+    const sq = ["#zoom-out", "#zoom-in", "#fit"].map(box), eye = box("#eye-box"), cs = (q) => getComputedStyle(document.querySelector(q));
+    const squares = sq.every((b) => b.width === 32 && b.height === 32) && sq.every((b, i) => i === 0 || Math.abs(b.left - sq[i - 1].right) < 0.5) && Math.abs(sq[2].right - eye.right) < 0.5
+      && cs("#zoom-out").borderTopLeftRadius === cs("#eye-box").borderTopLeftRadius && cs("#zoom-in").borderTopLeftRadius === "0px" && cs("#fit").borderTopRightRadius === cs("#eye-box").borderTopRightRadius
+      && ["#zoom-out", "#zoom-in", "#fit"].every((q) => document.querySelector(q + " svg")) && !document.querySelector(".zoomsign");
+    return { play: w("#play"), squares, edge: +(innerWidth - sq[2].right).toFixed(1), gaps, touch: +(box("#ampm").left - box(".timewell").right).toFixed(1), half: [+box("#ampm").width.toFixed(1), +box("#ampm").height.toFixed(1), +((box("#ampm").top + box("#ampm").bottom) / 2 - (box(".timewell").top + box(".timewell").bottom) / 2).toFixed(1)], end: Math.round(box(".bar .lead").right - pad - box("#now").right) }; });
+check(fits.play === 34 && fits.squares && fits.gaps[0] === 24 - 3.5 && fits.gaps[1] === fits.gaps[2] && fits.touch === 0 && fits.half[1] === 30 && Math.abs(fits.half[2]) < 0.5 && fits.end === 0,
+  `under the panel: play, a margin less what the speed box grew toward it (24 − 3.5, Okay 15 Oct 03:18), how fast · the time with AM · PM attached, as high, its word the time's size (#284, 4.44.6), then the date touching it (4.62) · NOW one equal gap apart, NOW ending on the panel's last column; at the right zoom out · zoom in · fit, three 32 squares stuck together, the outer corners the canvas switches', the right edge on the eye switch's (${fits.edge} from the window) (Okay, 25 Oct 2026: "like 3 stuck together canvas buttons on the bar, aligned with canvas brothers from edge") (${JSON.stringify(fits)})`);
 { // the bar's time, second look (#306, 4.45.5): the figures tracked +0.04em, AM · PM 5.5 each side; NOW drawn as the bar's other boxes (#414)
   const look = await page.evaluate(() => { const c = (q) => getComputedStyle(document.querySelector(q)); return [c("#time").letterSpacing, c("#ampm").paddingLeft, c("#ampm").paddingRight, c("#now").backgroundColor, c("#now").color === c("#ampm").color && c("#now").borderTopColor === c("#ampm").borderTopColor]; });
   check(look.join(" ") === "0.8px 5.5px 5.5px rgba(0, 0, 0, 0) true", `the bar's time: its figures tracked +0.04em, AM · PM closer to its word; NOW unfilled, its outline and word AM · PM's (${look.join(" · ")}) (Okay, 19 Oct 2026, #414: "Why? fill with grey, worst colour")`);
@@ -1690,7 +1783,7 @@ if (numerals) {
   const texts = live_text.match(/<text [^>]*>[^<]*<\/text>/g) || [];
   const first = /translate\(([-\d.]+) ([-\d.]+)\) rotate/.exec(texts.find((x) => x.includes("rotate(")) || "");
   check(texts.length >= numerals.n && texts[0].includes(`font-family="${numerals.family}"`), `SVG with live text: ${texts.length} texts in ${numerals.family}`);
-  if (numerals.mode === 0) check(first && near(+first[1], numerals.c[0], 0.01) && near(+first[2], -numerals.c[1], 0.01), "the first numeral's text stands where its outline's centre is");
+  if (numerals.mode === 0) check(first && near(+first[1], numerals.c[0], 0.01) && near(+first[2], -numerals.c[1], 0.03), "the first numeral's text stands where its outline is: its middle across, its capital H's middle up and down (#488; the figures a hair off the H)");
 }
 check((live_text.match(/<path/g) || []).length >= 6 && !svg_text.includes("<text"), "everything else stays outlines; without the tick there is no text");
 await page.uncheck("#global-out-live-text-Keep-numerals-as-text-in-the-SVG");
@@ -1701,7 +1794,7 @@ await page.uncheck("#global-out-live-text-Keep-numerals-as-text-in-the-SVG");
     return { pinned: [...p.querySelectorAll("h2")].map((h) => h.textContent).join(), order: rows.map((r) => (r.querySelector("button.main") || {}).id || (r.querySelector("input") || {}).id || r.className).join(" | "),
       pdf: left("#export-pdf"), svg: left("#export-svg"), png: left("#export-png"), label: left(".pinned .row > label"), tick: left(".pinned .check"), lines: rows.map(shadow).join(""), halves: rows.map(half).join(""), below: [...document.querySelectorAll(".form .pane h2")].map((h) => h.textContent).join(" · ") };
   });
-  check(e.pinned === "Export a file" && e.order === "export-pdf | export-svg | global-out-live-text-Keep-numerals-as-text-in-the-SVG | export-png | global-out-dpi-dpi-slider | row note under | export-wearos | wearos-name | row note under" && e.pdf === e.svg && e.png === e.pdf && e.pdf > e.label && e.tick === e.svg && e.lines === "211111111" && e.halves === "010100100"      /* a row and its note are one box: no line, half or whole, between them (#420) */ && e.below === "Print · Link to this dial · Settings file · Log · Gallery",
+  check(e.pinned === "Export a file" && e.order === "export-pdf | export-svg | global-out-live-text-Keep-numerals-as-text-in-the-SVG | export-png | global-out-dpi-dpi-slider | row note under | export-wearos | wearos-name | row note under" && e.pdf === e.svg && e.png === e.pdf && e.pdf > e.label && e.tick === e.svg && e.lines === "211111111" && e.halves === "010100100"      /* a row and its note are one box: no line, half or whole, between them (#420) */ && e.below === "Print · A set of files · Moving picture · Share dial as link · Settings file · Log · Gallery",
     `Export a file is pinned: Vector · PDF, SVG under it with its tick tied to it, then PNG on the same column with its dpi under it, then Wear OS's APK with its name under it (4.67); a half line, from the buttons' column, before each nested row, none between a row and its note (the tick, the dpi: ${e.lines} ${e.halves}); below scroll ${e.below}`);
   await shot("4c21-export");
 }
@@ -1738,28 +1831,187 @@ await page.uncheck("#global-out-production-Mono-print-mask");
   check(n > 10 && drawn === n && placed === n && near(+box[1] / 72 * 25.4, 210, 0.01) && near(+box[2] / 72 * 25.4, 297, 0.01) && !/ S\n|BT\n/.test(text) && six.startsWith("6 copies") && six_drawn === 6 && path.basename(sheet).includes("-sheet-"),
     `a print sheet: "${all}" — ${placed} copies placed on an A4 (${(+box[1] / 72 * 25.4).toFixed(1)} × ${(+box[2] / 72 * 25.4).toFixed(1)} mm), filled paths only, drawn beside its button; Copies 6: "${six}"; ${path.basename(sheet)}`);
 }
-{ // your own dials (4.76, #347; Okay's notes 2: "Instances of a watch: a save instance button; a gallery of them"): Save this dial keeps it with a picture in this browser, over the Gallery; its card opens it again, or goes
+{ // the production debts (#219–#224, 4.90), each a tick in Print that starts as files were made: what the windows show,
+  // hidden rings that still cut, a mask's cut lines, its invert, its outline and registration marks. Preview and files alike (R26)
+  const roles = () => page.evaluate(() => [...new Set(window.dial_tool.items.map((i) => i.role))].join(" "));
+  const was = await page.evaluate(() => JSON.stringify(window.dial_tool.S));
+  const g = (k, v) => page.evaluate(([k, v]) => window.dial_tool.set_value("global", k, v), [k, v]).then(frame);
+  await page.evaluate(() => { const t = window.dial_tool; t.S.ui_window = 0; t.set_value("window", "on", true); t.set_value("window", "kind", 0); });
+  await g("out_production", false);
+  const shown = await roles();
+  await g("out_window_content", false);
+  const bare = await roles(), plate_holes = await page.evaluate(() => { const p = window.dial_tool.items.find((i) => i.role === "plate"); return p.path.d.filter((c) => c[0] === "M").length; });
+  await g("out_window_content", true);
+  // #221: the minute ticks knocked out by every ring above; Markers hidden → the ticks under them come back; with
+  // "Hidden rings still cut" the ticks are cut as with Markers shown, and Markers are still not drawn
+  const ticks_path = () => page.evaluate(() => { const it = window.dial_tool.items.find((i) => i.role === "ring" && i.ring.ring.name === "Minute ticks"); return it ? it.path.svg(3) : ""; });
+  const ring_on = (name, on) => page.evaluate(([name, on]) => { const t = window.dial_tool, i = t.S.rings.findIndex((r) => r.name === name); t.S.ui_ring = i; t.set_value("ring", "on", on); }, [name, on]).then(frame);
+  await page.evaluate(() => { const t = window.dial_tool, i = t.S.rings.findIndex((r) => r.name === "Minute ticks"); t.S.ui_ring = i; t.set_value("ring", "knock", 3); t.set_value("ring", "clear", 0.4); }); await frame();
+  const all_on = await ticks_path();
+  await ring_on("Markers", false);
+  const hidden = await ticks_path();
+  await g("out_hidden_cut", true);
+  const ghost = await ticks_path(), markers_drawn = await page.evaluate(() => window.dial_tool.items.some((i) => i.role === "ring" && i.ring.ring.name === "Markers"));
+  await g("out_hidden_cut", false);
+  await ring_on("Markers", true);
+  // a mask: its cut lines, invert, marks
+  await g("out_production", true);
+  const mask = await roles();
+  await g("out_cutlines", false); const uncut = await roles();
+  await g("out_marks", true); const marked = await roles(), reg = await page.evaluate(() => window.dial_tool.items.filter((i) => i.role === "registration").length);
+  await g("out_invert", true); const inverted = await roles();
+  const pdf = await download("#export-pdf"), text = fs.readFileSync(pdf, "latin1");
+  await page.evaluate((w) => { const t = window.dial_tool; t.reopen(JSON.parse(w)); }, was); await frame();
+  check(shown.includes("date number") && !bare.includes("date disc") && !bare.includes("date number") && plate_holes >= 2,
+    `What the windows show (#219), off: no disc or number, the window's hole in the plate stays (${bare})`);
+  check(all_on !== hidden && ghost === all_on && !markers_drawn, `Hidden rings still cut (#221): a hidden Markers ring knocks the minute ticks out as if shown, and is not drawn (${all_on.length} · ${hidden.length} · ${ghost.length} characters of path)`);
+  check(/cutline|hole/.test(mask) && !/cutline|hole/.test(uncut) && marked.includes("outline") && reg === 4 && inverted.split(" ").filter((r) => !["outline", "registration", "guide"].includes(r)).join() === "inverted" && (text.match(/\nf\n/g) || []).length >= 6,
+    `a mask's ticks (#222–#224): cut lines off takes them out (${uncut}); Outline and registration marks: the blank's edge and ${reg} marks; Inverted: one shape, the dial less the marks (${inverted})`);
+}
+{ // three dead ends (R17), 4.90: Diameter's limits (#233), the ring list's pill whenever it has a use (#448), changes kept while time plays (#234)
+  const d0 = await S("S.dial_d");
+  await tab("Dial");
+  await enter_value("#global-dial-d-Diameter", "1000"); await frame();
+  const typed = true;
+  const big = await S("S.dial_d"), said = await page.evaluate(() => { const n = document.querySelector("#preview-note"); return !n.hidden && n.textContent.includes("stops at 300"); });
+  await page.evaluate((d) => window.dial_tool.set_value("global", "dial_d", d), d0); await frame();
+  const pill = await page.evaluate(() => { const t = window.dial_tool, n = t.S.rings.length, keep = t.ring_rows_shown, out = [];
+    t.ring_rows_shown = Math.max(n - 1, 1); t.sync_list_grip(); out.push(t.pinned.classList.contains("ring-scrolls"));      // fewer rows kept than rings: it scrolls, so the pill
+    t.ring_rows_shown = 5; t.sync_list_grip(); out.push(t.pinned.classList.contains("ring-scrolls"));      // shown always (03:41)
+    t.ring_rows_shown = keep; t.sync_list_grip(); return [n, ...out]; });
+  await page.evaluate(() => window.dial_tool.play(true));
+  await page.evaluate(() => window.dial_tool.set_value("global", "c_plate", [0.2, 0.4, 0.6, 1]));
+  await page.waitForTimeout(2600);
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("dial-tool-last")).c_plate.join());
+  await page.evaluate(() => window.dial_tool.play(false));
+  await page.evaluate(() => window.dial_tool.undo(-1)); await frame();
+  await tab("Export");      // back where the checks after this one work
+  check(typed && big === 300 && said && pill.slice(1).every(Boolean) && kept === "0.2,0.4,0.6,1",
+    `Diameter typed 1000 stops at ${big} and the preview says so (#233); the ring list's pill shows when fewer rows are kept than its ${pill[0]} rings (#448); a change made while time plays is kept within 2 s (${kept}, #234)`);
+}
+{ // 4.90's functions, block A (Okay's go of 20 Oct 2026, 02:02, his program of 02:19): a unit typed in a length's field (#187),
+  // a slider finer away from its track (#406), undo steps named and listed (#172), am · pm Jump (#401), the thinnest line
+  // in the log (#225), Weight % (#88), a set of files (#171)
+  await tab("Dial");
+  const d0 = await S("S.dial_d");
+  await enter_value("#global-dial-d-Diameter", "1.5in"); await frame();
+  const inch = await S("S.dial_d");
+  await enter_value("#global-dial-d-Diameter", String(d0)); await frame();
+  // the slider: pressed at its middle, then moved 30 px along — once on its track, once 150 px below it
+  const sl = await page.$eval("#global-dial-d-Diameter-slider", (e) => { const r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; });
+  const slide = async (dy) => { await page.mouse.move(sl[0], sl[1]); await page.mouse.down(); const a = await S("S.dial_d"); await page.mouse.move(sl[0], sl[1] + dy, { steps: 4 }); await page.mouse.move(sl[0] + 30, sl[1] + dy, { steps: 8 }); const b = await S("S.dial_d"); await page.mouse.up(); return b - a; };
+  const near_move = await slide(0), far_move = await slide(150);
+  await page.evaluate((d) => window.dial_tool.set_value("global", "dial_d", d), d0); await frame();
+  // steps named
+  await page.evaluate(() => { const t = window.dial_tool; t.take_step(); t.S.ui_ring = 0; t.set_value("ring", "r", 11.3); t.take_step(); t.set_value("global", "c_plate", [0.3, 0.3, 0.3, 1]); t.take_step(); });
+  await page.click("#history-more");
+  const steps = await page.$$eval("#history-list > *", (l) => l.map((e) => e.textContent));
+  await page.click("#history-list .histitem:nth-of-type(2)"); await frame();      // the second step back: both undone
+  const after = await S("S.rings[0].r !== 11.3 && S.c_plate[0] !== 0.3");
+  await page.evaluate(() => window.dial_tool.history_open(false));
+  // Weight %
+  const w0 = await S("S.rings.map((r) => r.w)");
+  await page.evaluate(() => window.dial_tool.set_value("global", "ui_weight", 150)); await frame();
+  const w1 = await S("S.rings.map((r) => r.w)");
+  await page.evaluate(() => window.dial_tool.set_value("global", "ui_weight", 100)); await frame();
+  const w2 = await S("S.rings.map((r) => r.w)");
+  // am · pm Jump: at 03:00 the disc stands at noon's place (all am) with Jump, between with it off
+  const jump = await page.evaluate(() => { const t = window.dial_tool; t.S.ui_window = 0; const was = [t.S.da_on, t.S.da_kind]; t.set_value("window", "on", true); t.set_value("window", "kind", 2); t.set_time(3 * 3600); t.frame();
+    const area = () => { const n = t.items.find((i) => i.role === "date picture" || i.role === "date number"); return n ? n.path.svg(2).length : 0; };
+    const sweep = area(); t.set_value("window", "jump", true); t.frame(); const jumped = area(); t.set_time(13 * 3600); t.frame(); const pm = area();
+    t.set_value("window", "jump", false); t.set_value("window", "kind", was[1]); t.set_value("window", "on", was[0]); t.set_time(10 * 3600 + 9 * 60 + 36); return [sweep, jumped, pm]; });
+  await tab("Export");
+  const pdf = await download("#export-pdf"), said = await page.evaluate(() => window.dial_tool.log_lines.slice(0, 4).join(" "));
+  const parts = [Math.abs(inch - 38.1) < 0.01, near_move > 0 && far_move > 0 && far_move < near_move * 0.6, steps.includes("Now") && steps.includes("Plate") && steps.some((x) => x.includes("Radius")), after,
+    w1.every((v, i) => Math.abs(v - w0[i] * 1.5) < 1e-4) && w2.every((v, i) => Math.abs(v - w0[i]) < 1e-4), jump[0] !== jump[1], /thinnest line/.test(said)];
+  check(parts.every(Boolean),
+    `(${parts.map(Number).join("")}) typed 1.5in → ${inch} mm (#187); the slider moved ${near_move.toFixed(2)} on its track, ${far_move.toFixed(2)} 150 px below it (#406); the steps named (${steps.join(" · ")}) and a press goes back two (#172); Weight 150 % and back (#88); Jump moves the am · pm disc (${jump.join(" ")}, #401); the log names the thinnest line (#225)`);
+  // a set of files: PDF and a mirrored mask ticked, one press, two files
+  await page.evaluate(() => { const t = window.dial_tool; t.set_value("global", "out_f_mirrored", true); });
+  await page.$eval("#export-set", (b) => b.scrollIntoView({ block: "center" }));
+  const got = [];
+  page.on("download", (d) => got.push(d.suggestedFilename()));
+  await page.click("#export-set"); await page.waitForTimeout(2500);
+  page.removeAllListeners("download");
+  await page.evaluate(() => window.dial_tool.set_value("global", "out_f_mirrored", false));
+  check(got.length === 2 && got.some((n) => /-mask-mirrored-/.test(n)) && got.some((n) => !/mask/.test(n)), `a set of files (#171): one press writes the ticked ones (${got.join(", ")})`);
+}
+{ // 4.90, block B: Cap middle (#13), a spec sheet (#18), MP4 and GIF (#51), font files kept (#56)
+  // Cap middle: every label on one line — a numeral's middle stands where the H's middle is, not its own ink's
+  const cap = await page.evaluate(() => { const t = window.dial_tool; t.S.ui_ring = t.S.rings.findIndex((r) => r.kind === 2); if (t.S.ui_ring < 0) return null;
+    const was = t.S.rings[t.S.ui_ring].anchor; t.set_value("ring", "anchor", 5); t.frame(); const d = t.statik.rings.find((x) => x.kind === "numerals"); const ok = Boolean(d && d.parts.length);
+    t.set_value("ring", "anchor", was); t.frame(); return ok; });
+  const spec = await download("#export-spec"), svg = fs.readFileSync(spec, "utf8");
+  await page.evaluate(() => { const t = window.dial_tool; t.set_value("global", "out_seconds", 1); t.set_value("global", "out_fps", 6); t.set_value("global", "out_px", 240); });
+  const gif = await download("#export-gif"), mp4 = await download("#export-mp4");
+  const gb = fs.readFileSync(gif), mb = fs.readFileSync(mp4);
+  await page.evaluate(() => { const t = window.dial_tool, D = { out_seconds: 4, out_fps: 30, out_px: 1080 }; for (const k in D) t.set_value("global", k, D[k]); });
+  // a mask per ink (#35): two colours on the dial → two films, each named by its ink
+  const ink_was = await page.evaluate(() => { const t = window.dial_tool, i = t.S.rings.length - 1, was = JSON.stringify(t.S.rings[i].c); t.S.ui_ring = i; t.set_value("ring", "c", [0.8, 0.1, 0.1, 1]); t.set_value("global", "out_production", true); return [i, was]; }).catch(() => null);
+  const films = [];
+  page.on("download", (d) => films.push(d.suggestedFilename()));
+  await page.$eval("#export-inks", (b) => b.scrollIntoView({ block: "center" })).catch(() => {});
+  await page.click("#export-inks").catch(() => {}); await page.waitForTimeout(2500);
+  page.removeAllListeners("download");
+  if (ink_was) await page.evaluate(([i, was]) => { const t = window.dial_tool; t.S.ui_ring = i; t.set_value("ring", "c", JSON.parse(was)); t.set_value("global", "out_production", false); }, ink_was);
+  // a font file added by hand is there again after the page is opened again
+  await page.setInputFiles("#font-file", "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf").catch(() => {});
+  await page.waitForTimeout(800);
+  await page.reload(); await page.waitForFunction(() => window.dial_tool && window.dial_tool.statik); await page.waitForTimeout(800);
+  const kept = await page.evaluate(() => [...window.dial_tool.catalog.values()].some((f) => /DejaVuSerif-Bold/.test(f.ps)));
+  await tab("Export");
+  const parts = [films.length >= 2 && films.every((n) => /-mask-ink-[0-9A-F]{6}/.test(n)), cap !== false, /<svg[^>]+width="297mm"/.test(svg), !/<text|stroke=/.test(svg), (svg.match(/<path/g) || []).length > 40, gb.subarray(0, 6).toString() === "GIF89a", mb.subarray(4, 8).toString() === "ftyp", kept];
+  check(parts.every(Boolean),
+    `(${parts.map(Number).join("")}) Cap middle draws (#13); a spec sheet, A4 on its side, outlines only (${path.basename(spec)}, #18); a GIF (${gb.length} bytes) and an MP4 (${mb.length} bytes) of one second (#51); a font file added by hand is back after a reload (#56)`);
+}
+{ // your own dials (4.76, #347), in Versions under undo (#435; Okay, 19 Oct 2026, 23:11: "place this under undo. Icon: dial with two hands. This is versions … 3x grid. 'edit this dial' and others activate on clicks there too. top, there is a compare button"): Save this dial keeps it with a picture in this browser; its card opens it again, or goes
+  const open_versions = async () => { if (await page.$eval("#version-list", (l) => l.hidden)) await page.click("#versions"); };
   await page.evaluate(() => localStorage.removeItem("dial-tool-instances"));
-  await page.$eval("#instance-save", (e) => e.scrollIntoView({ block: "center" }));
+  await open_versions();
+  const under = await page.evaluate(() => { const u = document.querySelector(".undopair").getBoundingClientRect(), v = document.querySelector("#versions").getBoundingClientRect(); return v.left >= u.right && Math.abs(v.top - u.top) < 1 && !document.querySelector(".panel #instance-save"); });      // on undo's line, after it (#517; Okay, 24 Oct 2026: "Versions go up, right of the top row buttons")
   const plate = await S("JSON.stringify(S.c_plate)");
   await page.click("#instance-save"); await page.waitForFunction(() => document.querySelectorAll("#instance-cards a").length === 1);
+  const lone = await page.$eval("#instance-compare", (b) => b.hidden);      // R16: Compare needs two
   await page.evaluate(() => window.dial_tool.set_value("global", "c_plate", [0.15, 0.2, 0.35, 1]));
+  await open_versions();
   await page.click("#instance-cards a"); await page.click("#instance-cards a.focus .btn.main");
   await page.waitForFunction((p) => JSON.stringify(window.dial_tool.S.c_plate) === p, plate, { timeout: 5000 }).catch(() => {});
-  const back = await S("JSON.stringify(S.c_plate)"), card = await page.$eval("#instance-cards a", (a) => [a.querySelectorAll("svg path").length > 10, a.textContent.includes("mm ·")]);
-  await page.$eval("#instance-cards a", (a) => a.scrollIntoView({ block: "center" }));
-  await page.click("#instance-cards a"); await page.click('#instance-cards a.focus .btn:text-is("Remove")');
+  const back = await S("JSON.stringify(S.c_plate)"), shut = await page.$eval("#version-list", (l) => l.hidden);
+  await open_versions();
+  const card = await page.$eval("#instance-cards a", (a) => [a.querySelectorAll("svg path").length > 5, a.textContent.includes("mm ·")]);
+  const size = await S("S.dial_d");      // put back after Compare's dials of other sizes: the checks after this one expect it
+  // Compare: a second and third saved dial (another size), then every one on the backdrop, packed, the panel away
+  for (const d of [30, 42]) { await page.evaluate((d) => window.dial_tool.set_value("global", "dial_d", d), d); await open_versions(); await page.click("#instance-save"); }
+  await page.waitForFunction(() => document.querySelectorAll("#instance-cards a").length === 3);
+  await page.click("#instance-compare");
+  await page.waitForTimeout(900);
+  const cmp = await page.evaluate(() => {
+    const v = document.querySelector("#compare-view").getBoundingClientRect(), cells = [...document.querySelectorAll(".comparedial")].map((c) => c.getBoundingClientRect());
+    const inside = cells.every((c) => c.left >= v.left - 0.5 && c.right <= v.right + 0.5 && c.top >= v.top - 0.5 && c.bottom <= v.bottom + 0.5);
+    const apart = cells.every((c, i) => cells.every((o, j) => i === j || Math.hypot(c.x - o.x, c.y - o.y) >= c.width - 0.5));
+    const w = cells.map((c) => c.width), mid = (cells.reduce((s, c) => s + c.left + c.right, 0) / 2 / cells.length);
+    return { n: cells.length, inside, apart, same: w.every((x) => x === w[0]), big: w[0] > 150, away: document.querySelector("#app").classList.contains("away"), shown: getComputedStyle(document.querySelector("#compare-view")).display !== "none", hidden: getComputedStyle(document.querySelector("main > svg")).visibility === "hidden" };
+  });
+  await page.keyboard.press("Escape"); await page.waitForTimeout(700);
+  const after = await page.evaluate(() => [document.querySelector("#app").classList.contains("away"), getComputedStyle(document.querySelector("#compare-view")).display]);
+  await open_versions();
+  const vsheet = fs.readFileSync(await download("#instance-sheet"), "utf8"), vsheet_ok = (vsheet.match(/<svg x=/g) || []).length === 3 && vsheet.includes('width="297mm"');      // #17: the saved dials on one A4
+  for (let k = 0; k < 3; k++) { await page.$eval("#instance-cards a", (a) => a.scrollIntoView({ block: "center" })); await page.click("#instance-cards a"); await page.click('#instance-cards a.focus .btn:text-is("Remove")'); }
   const gone = await page.evaluate(() => [document.querySelectorAll("#instance-cards a").length, JSON.parse(localStorage.getItem("dial-tool-instances")).length]);
-  check(back === plate && card.every(Boolean) && gone.join() === "0,0", `Save this dial keeps it with its picture (${card.join(" ")}); its card's Edit this dial brings it back (plate ${back}); Remove takes it away (${gone.join(" ")})`);
+  await page.evaluate(() => window.dial_tool.versions_open(false));
+  await page.evaluate((d) => window.dial_tool.set_value("global", "dial_d", d), size);
+  check(vsheet_ok, "Sheet (#17): the three saved dials on one A4, as an SVG");
+  check(under && lone && back === plate && shut && card.every(Boolean) && gone.join() === "0,0", `Versions stands on undo's line, after it, and holds your dials (none left in the panel); Save this dial keeps one with its picture (${card.join(" ")}); Compare hidden with one; Edit this dial brings it back (plate ${back}) and shuts the list; Remove takes them away (${gone.join(" ")})`);
+  check(cmp.n === 3 && cmp.inside && cmp.apart && cmp.same && cmp.big && cmp.away && cmp.shown && cmp.hidden && after.join() === "false,none",
+    `Compare (#435): the three saved dials on the backdrop, one size (${cmp.big ? "over 150 px" : "small"}), apart, inside the room the switches leave, the panel away and the dial hidden; Escape brings the panel back (${JSON.stringify(cmp)} · ${after.join(" ")})`);
 }
 const saved = await download("#save");
 const before_save = await S("JSON.stringify(S)");
 check(JSON.stringify(JSON.parse(fs.readFileSync(saved, "utf8"))) === before_save, "Save… writes the settings as they are");
-await page.click("#plain");
+await page.evaluate(() => window.dial_tool.reopen({ ui_section: window.dial_tool.S.ui_section }));      // the plain starting values (the Settings file pane has Save… · Load… only, #434)
 await page.waitForFunction(() => window.dial_tool.statik);
 check(await S("S.ha_hour.round === 0"), "Plain dial clears them");
-await page.setInputFiles("#load-file", saved);
-await page.waitForFunction(() => window.dial_tool.S.ha_hour.round === 2);
+await load_settings_file(saved);
 const after_load = await S("JSON.stringify({ ...S, ui_section: 0 })");
 check(after_load === JSON.stringify({ ...JSON.parse(before_save), ui_section: 0 }), "Load… brings every setting back");
 { // after Load the pane names the file and Save… offers that name again; a sentence says what a settings file is (Okay, 16 Oct 2026, #279)
@@ -1785,12 +2037,11 @@ await page.click('.gallery a:has-text("Diver") >> nth=-1');
     const rows = await page.evaluate(() => { const a = [...document.querySelectorAll(".gallery a")].filter((x) => x.textContent.includes("Diver")).at(-1), next = [...a.parentElement.children].indexOf(a) + 3, below = a.parentElement.children[next]; return below ? Math.round(below.getBoundingClientRect().top - a.getBoundingClientRect().bottom) : null; });
   check(f[0] && f[1] === "0px" && f[2] === "Edit this dial · In a new tab" && f[3] === "grid" && (rows === null || rows >= 0), `a press on a card fills it with the chosen tint, no line round it, its two choices (${f[2]}) growing down over the row under it, the rows staying put (notes 2, 18 Oct 2026); the dial is not taken yet (${f.join(" · ")})`);
   await page.click('.gallery a:has-text("Diver") >> nth=-1 >> text=Edit this dial'); }
-await page.waitForFunction((h) => location.hash === h && window.dial_tool.statik && window.dial_tool.S.ui_section === 4, example, { timeout: 8000 }).catch(() => {});
+await page.waitForFunction(() => window.dial_tool.statik && window.dial_tool.S.ui_section === 4 && window.dial_tool.log_lines.some((l) => l.includes("opened the dial in the address")), null, { timeout: 8000 }).catch(() => {});
 await page.waitForTimeout(700);
-check(await page.evaluate((h) => location.hash === h, example) && await S("t.log_lines.slice(0, 3).every((l) => !l.includes('stands in'))"), "clicking Diver opens it: the address is its link and its fonts are drawn");
+check(await page.evaluate(() => location.hash === "") && await S("t.log_lines.some((l) => l.includes('opened the dial in the address'))") && await S("t.log_lines.slice(0, 3).every((l) => !l.includes('stands in'))"), "clicking Diver opens it from its link, its fonts drawn; the address is then the site's own, short (#537)");
 await shot("9-example");
-await page.setInputFiles("#load-file", saved);
-await page.waitForFunction(() => window.dial_tool.S.ha_hour.round === 2);
+await load_settings_file(saved);
 
 // ── a dial as a link ──
 await context.grantPermissions(["local-fonts", "clipboard-read", "clipboard-write"]).catch(() => {});
@@ -1799,19 +2050,33 @@ await page.evaluate(() => window.dial_tool.set_value("global", "ha_beat", 1));  
 await page.waitForTimeout(300);
 await page.click("#copy-link");
 await page.waitForFunction(() => window.dial_tool.log_lines[0].includes("link copied"), null, { timeout: 5000 }).catch(() => {});
-const link = await page.evaluate(() => location.href);
+const link = await page.evaluate(() => navigator.clipboard.readText()).catch(() => "") || await page.inputValue("#link");
+check(await page.evaluate(() => location.hash === ""), "the address bar stays short while Copy link copies the whole dial (#537; Okay, 24 Oct 2026: \"hide the full address and make the link still work\")");
 { // the link on one line, cut at the box's edge; Copy link with its sign, flush right on the pane's heading line (#277)
   const l = await page.evaluate(() => { const box = document.getElementById("link"), c = getComputedStyle(box), b = document.getElementById("copy-link"), fold = b.closest(".pane").querySelector(".fold").getBoundingClientRect(), r = b.getBoundingClientRect();
     return { input: box.tagName === "INPUT", cut: c.textOverflow === "ellipsis" && c.whiteSpace === "nowrap", head: r.top >= fold.top && r.bottom <= fold.bottom, right: Math.round(fold.right - r.right), sign: Boolean(b.querySelector("svg")), mono: getComputedStyle(document.getElementById("log")).fontFamily.toLowerCase().includes("mono") }; });
   check(await page.inputValue("#link") === link && l.input && l.cut && l.head && l.right <= 1 && l.sign && l.mono, `the link stands on one line, cut at the box's edge; Copy link, with its sign, flush right on the heading line (${JSON.stringify(l)}); the log is monospaced`);
 }
-check(/#3[0-9A-Z]+$/.test(link), `Copy link: the address carries the dial in capitals and digits only, link scheme 3 (#278; 3 since 4.88; ${link.split("#")[1].length} characters after #)`);
+check(/#5[0-9A-Z]+$/.test(link), `Copy link: the address carries the dial in capitals and digits only, link scheme 5 (#278; 5 since 4.92.18, #228; ${link.split("#")[1].length} characters after #)`);
 const wanted = await S("JSON.stringify({ ...S, ui_section: 0, ui_ring: 0, ui_hand: 0 })");
 const other = await (await visitor()).newPage();      // someone else's browser: no last session of this dial. A browser of its own, not a second tab: a tab shares the first one's storage, where the first keeps saving its dial while its clock runs (found 16 Oct 2026, 4.42.5: a save landed while this page started)
-await other.addInitScript(() => localStorage.removeItem("dial-tool-last"));      // and what it keeps itself between the addresses below
+await other.addInitScript(() => { setTimeout(() => localStorage.removeItem("dial-tool-last"), 0); });      // and what it keeps itself between the addresses below
 await other.goto(link);
 await other.waitForFunction(() => window.dial_tool && window.dial_tool.statik);
 const got = await other.evaluate(() => JSON.stringify({ ...window.dial_tool.S, ui_section: 0, ui_ring: 0, ui_hand: 0 }));
+{ // the short address (#537): the link opens the dial, the address is cut back to the site's, and a reload keeps the dial from the session
+  // (a browser of its own: "other" clears its session at every load, so its reload could not keep anything)
+  const fresh = await (await visitor()).newPage();
+  await fresh.goto(link); await fresh.waitForFunction(() => window.dial_tool && window.dial_tool.statik);
+  const cut = await fresh.evaluate(() => location.hash === "" && location.href === location.href.split("#")[0]);
+  // the session is written before the address is cut (keep_and_shorten); the reload comes once the browser's storage
+  // shows it (#541: a reload once brought the opener back — the write not yet there, or lost)
+  const stored = await fresh.waitForFunction(() => { try { return JSON.parse(localStorage.getItem("dial-tool-last")).dial_d; } catch (e) { return false; } }, null, { timeout: 5000 }).then((h) => h.jsonValue(), () => "none");
+  await fresh.reload(); await fresh.waitForFunction(() => window.dial_tool && window.dial_tool.statik);
+  const kept = await fresh.evaluate(() => JSON.stringify({ ...window.dial_tool.S, ui_section: 0, ui_ring: 0, ui_hand: 0 })), opened = await fresh.evaluate(() => window.dial_tool.log_lines.filter((l) => /session|opener|address/.test(l)).join(" | "));
+  await fresh.close();
+  check(cut && stored === JSON.parse(got).dial_d && JSON.parse(kept).ha_beat === JSON.parse(got).ha_beat && JSON.parse(kept).dial_d === JSON.parse(got).dial_d && JSON.parse(kept).rings.length === JSON.parse(got).rings.length, `a dial's link opens the dial, then the address bar shows only the site; a reload brings the same dial back (#537; cut ${cut}, stored ${stored}, diameter ${JSON.parse(kept).dial_d} / ${JSON.parse(got).dial_d}, beat ${JSON.parse(kept).ha_beat} / ${JSON.parse(got).ha_beat}, rings ${JSON.parse(kept).rings.length} / ${JSON.parse(got).rings.length}; the app: ${opened})`);
+}
 {
   // the same within what a link rounds (#246): a number to 3 decimals, a colour to hex, the time to the second (test/linktrip.mjs)
   const apart = (a, b, at = "") => typeof a === "number" && typeof b === "number" ? (Math.abs(a - b) <= (at === ".t" ? 0.5 : 0.5 / 255 + 0.5e-4) ? [] : [at])
@@ -1839,7 +2104,7 @@ await other.waitForFunction(() => window.dial_tool && window.dial_tool.statik);
 await other.goto(link.split("#")[0] + "#3NOTADIAL");
 await other.waitForFunction(() => window.dial_tool && window.dial_tool.statik);
 check(await other.evaluate(() => window.dial_tool.S.rings.length > 0), "a broken link opens the tool anyway");
-await other.goto(link.split("#")[0] + "#2" + link.split("#3")[1]);      // the same dial written as scheme 2 (before 4.88): known as an older scheme, not read (R31)
+await other.goto(link.split("#")[0] + "#2" + link.split("#5")[1]);      // the same dial written as scheme 2 (before 4.88): known as an older scheme, not read (R31)
 await other.waitForFunction(() => window.dial_tool && window.dial_tool.statik);
 check(await other.evaluate(() => { const t = window.dial_tool; return t.S.dial_d === 34 && !document.getElementById("preview-note").hidden; }), "a scheme-2 link (4.43–4.87) opens the First dial with the note (4.88, R31)");
 await other.goto(link.split("#")[0]);
@@ -1882,50 +2147,73 @@ await other.context().close();
   await p.evaluate(() => [...document.querySelectorAll(".form .pane")].find((x) => x.querySelector("h2").textContent.trim() === "Numerals").querySelector(".fold").click()); await p.waitForTimeout(300);
   await p.selectOption("#ring-labels-Labels", { label: "Custom" }); await p.waitForTimeout(300);
   const hint = await p.evaluate(() => [...document.querySelectorAll(".form .row.note")].filter((n) => n.offsetParent).map((n) => n.textContent).join(" | "));
-  // Export: Copy link stays on its folded pane's heading line; Defaults gives the guide's First dial, Plain dial the plain starting values (#277, #279)
+  // Export: Copy link stays on its folded pane's heading line (#277); the settings file's pane has Save… · Load… only (#434)
   await p.click('button[data-tab="Export"]'); await p.waitForTimeout(200);
   const copy_folded = await p.isVisible("#copy-link") && await p.evaluate(() => document.getElementById("copy-link").closest(".pane").classList.contains("folded"));
   await p.evaluate(() => window.dial_tool.set_value("global", "dial_d", 25)); await p.waitForTimeout(300);
-  await p.click(".form .pane:has(#defaults) .fold"); await p.waitForTimeout(300);
-  await p.click("#defaults"); await p.waitForTimeout(500);
-  const defaults = await p.evaluate(() => [window.dial_tool.S.dial_d, window.dial_tool.S.rings.map((r) => r.name).join(" · ")]);
-  await p.click("#plain"); await p.waitForTimeout(500);
-  const plain = await p.evaluate(() => location.hash);
-  if (!(copy_folded && defaults[0] === 34 && defaults[1] === "Numerals · Markers · Minute ticks" && plain.length < 12)) wrong.push(`Export: copy on the folded line ${copy_folded}, Defaults ${defaults.join(" ")}, Plain dial ${plain}`);
+  const file_btns = await p.$$eval(".form .pane:has(#save) .tools button", (b) => b.map((x) => x.textContent).join(" · "));
+  if (!(copy_folded && file_btns === "Save… · Load…")) wrong.push(`Export: copy on the folded line ${copy_folded}, the settings file's buttons ${file_btns}`);      // Save… · Load… only (#434: "Remove both")
   await fresh.close();
   check(!wrong.length && colours[0] > 0 && colours[0] === colours[1] && reset_shut && reset_open[0] && reset_open[1] === 0 && /Commas between labels/.test(hint),
     `a first visit: pinned panes open, the rest folded but a hand's and a window's pane (${wrong.length ? "wrong: " + wrong.join(", ") : Object.entries(seen).map(([k, v]) => k + ": " + v.map((x) => x.name + (x.shut ? " ▸" : " ▾")).join(", ")).join(" · ")}); folded Colours shows its ${colours[0]} colours as swatches; Reset folded says Reset alone, open its button stands on its heading line flush left with its warning (${reset_open[1]} apart; 4.44.2); Custom labels say how they work; Copy link stays on its folded line, Defaults gives the First dial, Plain dial the plain start`);
 }
-await page.click("#plain");
+await page.evaluate(() => window.dial_tool.reopen({ ui_section: window.dial_tool.S.ui_section }));      // the plain starting values (the Settings file pane has Save… · Load… only, #434)
 await page.waitForFunction(() => window.dial_tool.statik && window.dial_tool.S.ha_hour.round === 0);
 await page.waitForTimeout(600);
-const short = await page.evaluate(() => location.hash);
+const short = await page.evaluate(async () => "#" + (await window.dial_tool.show_link()).split("#")[1]);
 check(short.length < 12, `the starting dial's link is short (${short})`);
 await page.evaluate((l) => { location.hash = l.split("#")[1]; }, link);
 await page.waitForFunction(() => window.dial_tool.S.ha_hour.round === 2, null, { timeout: 5000 }).catch(() => {});
-check(await S("S.ha_hour.round === 2"), "pasting a link into the open tool switches to that dial");
+check(await S("S.ha_hour.round === 2") && await page.evaluate(() => location.hash === ""), "pasting a link into the open tool switches to that dial, and the address goes short again (#537)");
+{ // a set of saved dials as one link (#523; Okay, 24 Oct 2026: Share pane, opens as Compare, ask first, saved dials only)
+  const a = await (await visitor()).newPage();
+  await a.goto("file://" + process.cwd() + "/dial-tool.html"); await a.waitForFunction(() => window.dial_tool && window.dial_tool.statik);
+  await a.evaluate(() => { localStorage.removeItem("dial-tool-instances"); window.dial_tool.sync_rows(); });
+  const none = await a.isVisible("#copy-set");
+  for (const d of [30, 38]) {
+    await a.evaluate((d) => window.dial_tool.set_value("global", "dial_d", d), d); await a.waitForTimeout(500);
+    if (await a.$eval("#version-list", (l) => l.hidden)) await a.click("#versions");
+    await a.click("#instance-save"); await a.waitForTimeout(200);
+  }
+  await a.evaluate((old) => { const l = JSON.parse(localStorage.getItem("dial-tool-instances")); l.push({ id: "old", at: 1, name: "saved with its link only", link: old, picture: "<svg/>" }); localStorage.setItem("dial-tool-instances", JSON.stringify(l)); window.dial_tool.sync_rows(); }, "#4" + link.split("#5")[1]);      // a dial saved before 4.92.19: its link only, of scheme 4
+  const set = await a.evaluate(() => window.dial_tool.copy_set(null)), made = await a.evaluate(() => window.dial_tool.log_lines[0]);
+  await a.context().close();
+  const b = await (await visitor()).newPage();
+  await b.goto(set); await b.waitForFunction(() => window.dial_tool && window.dial_tool.statik);
+  await b.waitForSelector("#set-offer:not([hidden])", { timeout: 8000 }).catch(() => {});
+  const seen = await b.evaluate(() => ({ cut: location.hash === "", comparing: Boolean(window.dial_tool.comparing), cells: document.querySelectorAll(".comparedial").length, kept: JSON.parse(localStorage.getItem("dial-tool-instances") || "[]").length, ask: document.getElementById("set-offer").textContent }));
+  await b.screenshot({ path: path.join(OUT, "9c-set-link.png") });
+  await b.click("#set-add"); await b.waitForTimeout(300);
+  const kept = await b.evaluate(() => JSON.parse(localStorage.getItem("dial-tool-instances") || "[]").map((e) => Boolean(e.dial)));
+  await b.click(".comparedial >> nth=1"); await b.waitForTimeout(500);
+  const opened = await b.evaluate(() => window.dial_tool.S.dial_d);
+  await b.context().close();
+  await page.bringToFront();      // the window under test back in front: a page behind others lets its hover and animations wait
+  check(!none && /^\S+#V5[0-9A-Z]+$/.test(set) && made.includes("3 dials") && seen.cut && seen.comparing && seen.cells === 3 && seen.kept === 0 && /3 dials from a link/.test(seen.ask) && kept.length === 3 && kept.every(Boolean) && opened === 30,
+    `a set link (#523): Copy set link shows with two saved dials or more, and copies them all in one link, a dial saved with only its scheme-4 link too (${made}); opened elsewhere, the address short, the set in Compare (${seen.cells}), nothing kept until asked ("${seen.ask}"); Add keeps them whole (${kept}); a press on one edits it (${opened} mm)`);
+}
 
 // ── nothing jumps: a click on the preview keeps the rows; panes slide; the Guides switch keeps its size ──
 await tab("Rings");
 await page.click(".ringlist li.ring >> nth=2");
 await page.$eval(".form", (e) => { e.scrollTop = 180; });
 await page.evaluate(() => { window.__row = document.querySelector(".form .row"); });
-await page.click(".pinned .colour");
+await page.click(".pinned .ringline .colour");
 await click_mm(...clock(13, 150));                     // the marker at 5: a ring with the same panes as the ticks (a ring of another kind has other panes: there the scroll starts again)
 const kept = await page.evaluate(() => ({ same_rows: window.__row === document.querySelector(".form .row"), scroll: document.querySelector(".form").scrollTop, picker: document.querySelector("#colour-pop").hidden, ring: window.dial_tool.ring().name, list: document.querySelector(".ringlist li.ring.on .name").textContent }));
 check(kept.same_rows && kept.scroll === 180 && kept.picker && kept.ring === kept.list, `a click on the preview keeps the rows, their scroll (${kept.scroll}) and selects ${kept.ring}; the colour pop-out, pressed outside of, is put away`);
-await page.click(".pinned .colour");
+await page.click(".pinned .ringline .colour");
 await tab("Rings"); await page.$eval(".form", (e) => { e.scrollTop = 120; }); await tab("Dial"); await tab("Rings");
 check(await page.$eval(".form", (e) => e.scrollTop) === 120, "a section is back where it was scrolled to");
 await page.$eval(".form", (e) => { e.scrollTop = 0; });
 await tab("Dial");
 const guides_w = [];
-for (let i = 0; i < 2; i++) { guides_w.push(await page.$eval("#guides", (e) => e.getBoundingClientRect().width)); await page.click("#guides"); await frame(); }
+for (let i = 0; i < 2; i++) { guides_w.push(await page.$eval("#guides", (e) => e.getBoundingClientRect().width)); await page.click("#guides"); await page.mouse.move(1, 1); await page.waitForTimeout(400); }      // the pointer moved off, so its name, shown under a pointer (#518), isn't measured
 check(guides_w[0] === guides_w[1], `the Guides switch is the same width on and off (${guides_w.join(" / ")})`);
 check(await page.$eval("#global-dial-d-Diameter-slider", (e) => { const p = +e.style.getPropertyValue("--p"); return Math.abs(p - (e.value - e.min) / (e.max - e.min)) < 0.001 && getComputedStyle(e).appearance === "none"; }), "a slider knows how far along it is: its track is filled up to the handle");
 await page.emulateMedia({ reducedMotion: "no-preference" });
 const heights = await page.evaluate(async () => {
-  const pane = [...document.querySelectorAll(".pinned .pane")].find((p) => !p.hidden && !p.classList.contains("folded")), body = pane.querySelector(".body"), next = pane.nextElementSibling;
+  const pane = [...document.querySelectorAll(".pinned .pane")].find((p) => !p.hidden && !p.classList.contains("folded")), body = pane.querySelector(".body"), next = pane.nextElementSibling || document.querySelector(".form .pane");      // Dial's one pinned pane: what follows it is the scrolling part
   const open = body.offsetHeight, top0 = next.getBoundingClientRect().top, seen = [];
   pane.querySelector(".fold").click();
   for (let i = 0; i < 60 && (body.getAnimations().length || !i); i++) { await new Promise((r) => requestAnimationFrame(r)); seen.push(Math.round(body.getBoundingClientRect().height)); }
@@ -1991,7 +2279,7 @@ await tab("Export");
   { // Help (#230; Okay, 15 Oct 2026, 12:50: "next to beta number same font but underlined"): the guide, in a new tab
     const h = await page.evaluate(() => { const a = [...document.querySelectorAll(".panel .title a")].find((e) => e.textContent === "Help"), v = document.querySelector(".panel .title .quiet"), sa = a && getComputedStyle(a), sv = getComputedStyle(v);
       return a && { href: a.href, blank: a.target === "_blank", after: v.nextElementSibling === a, same: sa.fontFamily === sv.fontFamily && sa.fontSize === sv.fontSize && sa.color === sv.color, under: sa.textDecorationLine.includes("underline") }; });
-    check(h && h.href === "https://duztman.github.io/dial-tool/guide/" && h.blank && h.after && h.same && h.under, `Help beside the version, in its type and colour, underlined, opens the guide in a new tab (${JSON.stringify(h)})`);
+    check(h && h.href === "https://duztman.github.io/dial-tool/help/" && h.blank && h.after && h.same && h.under, `Help beside the version, in its type and colour, underlined, opens the help page in a new tab (#538) (${JSON.stringify(h)})`);
   }
   { // the way to the Gallery from the panel's top line: right after Help, as far from it as Help is from the version, as high as the unit box, darker than it and lighter than Help (Okay, 16 Oct 2026, #285; centred between Help and the unit box from 15 Oct, 07:45); pressed, Export with the Gallery in view
     await tab("Dial");
@@ -2036,9 +2324,9 @@ await tab("Export");
 }
 const look = await page.evaluate(() => { const q = (s) => document.querySelector(s), r = (s) => q(s).getBoundingClientRect(), c = (s) => getComputedStyle(q(s));
   return { square: !q("#panel-toggle"), bar: Math.round(r(".bar").height), play: [Math.round(r("#play").width), Math.round(r("#play").height), c("#play").borderRadius], time: c("#time").fontFamily.startsWith('"Dial Time"') && document.fonts.check('300 17px "Dial Time"'),
-    status: c(".bar .status").display, hint: q(".zoomsign").dataset.tip, first: q(".viewing").children[1] === q(".zoomsign") && q(".zooms").lastElementChild === q("#fit"), ruler: Math.round(r("#time-slider").width) }; });
-check(look.square && look.bar === 62 && look.play[0] === look.play[1] && look.play[2] === "50%" && look.time && look.status === "none" && look.hint.includes("⌘ + scroll") && look.first && look.ruler <= 518,
-  `the bar: a fifth higher (${look.bar}), no panel square, a round play, the time in Dial Time (Barlow Condensed Light, #284), no status line, the magnifier first with how to zoom in its tag, then − + FIT together (notes 2, 18 Oct 2026), the day slider no wider than an iPad's (${look.ruler})`);
+    status: c(".bar .status").display, hint: [q("#zoom-in").dataset.tip, q("#fit").dataset.tip], last: q(".zooms").lastElementChild === q("#fit"), ruler: Math.round(r("#time-slider").width) }; });
+check(look.square && look.bar === 62 && look.play[0] === look.play[1] && look.play[2] === "50%" && look.time && look.status === "none" && look.hint[0].includes("scroll") && look.hint[1].includes("right-drag") && look.last && look.ruler <= 518,
+  `the bar: a fifth higher (${look.bar}), no panel square, a round play, the time in Dial Time (Barlow Condensed Light, #284), no status line, how to zoom and move in the squares' tags (Okay, 25 Oct 2026: "Remove it; the tip goes on the buttons' tags"), Fit last, the day slider no wider than an iPad's (${look.ruler})`);
 { // the needle (notes 2, 18 Oct 2026: "Ruler pin does not move on bottom bar"; "1px wide and red, starts from the bottom of
   // the screen"): placed from the time, whatever has the focus; a press and a drag on the strip set the time (an iPad's own
   // range control did not scrub)
@@ -2060,7 +2348,7 @@ await shot("10-bar");
   await page.click("#date"); await frame();
   const look = () => page.evaluate(() => { const p = document.querySelector("#date-pop"), r = p.getBoundingClientRect(), d = document.querySelector("#date").getBoundingClientRect(), c = getComputedStyle(p);
     const words = [...p.querySelectorAll(".popline > *")].map((e) => (e.querySelector(".popword") || e).textContent).join(" ");
-    return { shown: !p.hidden, words, over: r.bottom <= d.top, face: c.fontFamily.includes("Dial Pop"), lines: p.querySelectorAll(".popline").length, steps: [...p.querySelectorAll(".popsteps .popstep")].length, menus: [...p.querySelectorAll("select")].map((s) => s.id).join(" "), w: Math.round(r.width), h: Math.round(r.height), centred: Math.abs((r.left + r.right) / 2 - (d.left + d.right) / 2) < 2 }; });
+    return { shown: !p.hidden, words, over: r.bottom <= d.top, face: !c.fontFamily.includes("Dial Pop") && c.fontSize === getComputedStyle(document.documentElement).fontSize, lines: p.querySelectorAll(".popline").length, steps: [...p.querySelectorAll(".popsteps .popstep")].length, menus: [...p.querySelectorAll("select")].map((s) => s.id).join(" "), w: Math.round(r.width), h: Math.round(r.height), centred: Math.abs((r.left + r.right) / 2 - (d.left + d.right) / 2) < 2 }; });
   const open = await look();
   await page.click("#date-pop .popsteps .popstep:last-child"); await frame();      // a day later
   const later = await look();
@@ -2079,45 +2367,167 @@ await shot("10-bar");
   await page.evaluate((w) => { const t = window.dial_tool, v = JSON.parse(w); t.set_value("global", "date", v[0]); t.set_time(v[1]); }, was);
   check(open.shown && open.words === "Mon 19 Oct 2026 " && open.over && open.face && open.lines === 1 && open.steps === 2 && open.menus === "date-pop-day date-pop-month date-pop-year" && open.centred
     && later.words === "Tue 20 Oct 2026 " && picked[0] === "2031-02-03" && picked[1] === "Mon 3 Feb 2031 " && clamped === "2026-02-28" && wide.w === open.w && wide.h === open.h && away,
-    `the bar's date opens its popup over the box, in Dial Pop: one line, no time — the weekday, then day · month · year as menus, then − and + together (${open.words}| ${open.menus}); + a day (${later.words}); the menus pick a day (${picked.join(" · ")}), a short month keeps the date in it (${clamped}); its size the same whatever the date reads (${open.w}×${open.h}, ${wide.w}×${wide.h}); a press elsewhere closes it (${away})`);
+    `the bar's date opens its popup over the box, in the panel's type at its size (Okay, 23:46: "remove barlow"): one line, no time — the weekday, then day · month · year as menus, then − and + together (${open.words}| ${open.menus}); + a day (${later.words}); the menus pick a day (${picked.join(" · ")}), a short month keeps the date in it (${clamped}); its size the same whatever the date reads (${open.w}×${open.h}, ${wide.w}×${wide.h}); a press elsewhere closes it (${away})`);
 }
 
-{ // the showcase (Okay, 15 Oct 2026, 04:26, reshaped 04:59 and 05:09)
-  const q = () => page.evaluate(() => { const t = window.dial_tool, r = (s) => document.querySelector(s).getBoundingClientRect(), c = (s) => getComputedStyle(document.querySelector(s));
-    return { show: !!t.show, w: innerWidth, h: innerHeight, z: t.z, dial: t.z * t.S.dial_d, c: t.c.slice(), moving: t.moving(), playing: t.playing, speed: t.speed, t: t.S.t, phase: t.show ? t.show.phase : null, from: t.show ? t.sun().from : null,
-      bar: c(".bar").visibility, guides: c(".guides").visibility, open: document.querySelector(".irisbox").getAttribute("aria-expanded"), words: Math.round(r("#iris-go").width),
-      iris: [Math.round(r(".irisbox").right), Math.round(r(".irisbox").bottom), r(".irisbox").top + r(".irisbox").height / 2], x: c(".irisbox .x").display, pill: [r("#show-now").left + r("#show-now").width / 2, r("#show-now").top + r("#show-now").height / 2, Math.round(r("#show-now").width), r("#show-now").right],
-      mast: [c(".mast").opacity, c(".mast").pointerEvents], sky: c(".sky").opacity, guide_items: t.items.filter((i) => i.role === "guide").length,
-      soft: [...document.querySelectorAll('.preview g[clip-path^="url(#shadow-clip"]')].some((g) => g.getAttribute("filter")), letter: c("#show-now").letterSpacing,
-      gap: Math.round(r("#eye-box").bottom) === Math.round(r(".irisbox").bottom) ? r("#eye-box").left - r(".irisbox").right : -1, hint_mid: (() => { const h = r("#sun-hint"), m = r("main"), below = m.top + t.c[1] + t.S.dial_d / 2 * t.z, above = r("#show-now").top; return Math.abs(h.top + h.height / 2 - (below + above) / 2) < 1 && h.width === 108; })() }; });
-  const before = await q();
-  await page.click("#iris-box"); await page.waitForTimeout(400);
-  const opened = await q();
-  await page.click("#iris-go"); await page.waitForTimeout(150);
-  const going = await q();
-  await page.waitForTimeout(1300); await page.mouse.move(5, 300);
+{ // show mode (#509; Okay, 22 Oct 2026: "left side slides out, right side slides in … Only the colors of the dial is editable here"; "Showcase has no caseless watches"; "Cases snap to dials")
+  const q = () => page.evaluate(() => { const t = window.dial_tool, app = document.querySelector("#app"), panel = document.querySelector(".panel"), main = document.querySelector("main");
+    return { on: Boolean(t.S.ui_show), showing: app.classList.contains("showing"), away: app.classList.contains("away"), section: t.S.ui_section, tabs: [...document.querySelectorAll(".tabs button")].filter((b) => !b.hidden).map((b) => b.dataset.tab).join(" "),
+      right: panel.getBoundingClientRect().left > main.getBoundingClientRect().left, watch: document.querySelector("g.watch").childElementCount, dial: getComputedStyle(t.dial).display, bar: getComputedStyle(document.querySelector(".bar")).visibility,
+      tinted: Boolean(panel.style.getPropertyValue("--column")), z: t.z, case_box: document.querySelector("#case").checkVisibility(), sky: Boolean(document.querySelector(".sky")) }; });
+  await page.click("#fit"); await frame();      // both ends Fit: the case in show mode, the dial back out
+  const home = await q(), z0 = home.z;
+  await page.click("#iris-box"); await page.waitForTimeout(300); await page.click("#iris-go"); await page.waitForTimeout(2400);
   const on = await q();
-  await page.waitForTimeout(1000);
-  const later = await q();
-  await page.mouse.move(on.w / 4, on.h / 2); await page.mouse.down(); await page.mouse.move(on.w / 4 + 1, on.h / 2);
-  const dragged = await q(); await page.mouse.up();
-  await page.click("#show-now"); await page.waitForTimeout(300);
-  const spinning = await q();
-  await page.waitForTimeout(1700);
-  const nowed = await q(), clock = await page.evaluate(() => { const d = new Date(); return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds(); });
-  await page.click("#show-now"); await page.waitForTimeout(2000);
-  const unnowed = await q();
-  await page.click("#iris-box"); await page.waitForTimeout(1300);
-  const back = await q();
-  const page_px = Math.min(on.w / 210, on.h / 297) * 210 * 2 / 3, inset = 24;
-  const sc = [['!before.show', !before.show], ['before.gap === 5.5', before.gap === 5.5], ['on.hint_mid', on.hint_mid], ['opened.open === "true"', opened.open === "true"], ['opened.words > 100', opened.words > 100], ['!opened.show', !opened.show], ['going.show', going.show], ['going.moving', going.moving], ['going.bar === "hidden"', going.bar === "hidden"], ['Math.abs(on.dial - page_px) < 0.5', Math.abs(on.dial - page_px) < 0.5], ['Math.abs(on.c[0] - on.w / 2) < 0.5', Math.abs(on.c[0] - on.w / 2) < 0.5], ['Math.abs(on.c[1] - on.h / 2) < 0.5', Math.abs(on.c[1] - on.h / 2) < 0.5], ['!on.moving', !on.moving], ['on.soft', on.soft], ['on.playing', on.playing], ['on.speed === 1', on.speed === 1], ['on.guides === "hidden"', on.guides === "hidden"], ['on.guide_items === 0', on.guide_items === 0], ['on.iris[0] === on.w - inset', on.iris[0] === on.w - inset], ['on.iris[1] === on.h - inset', on.iris[1] === on.h - inset], ['on.x !== "none"', on.x !== "none"], ['Math.abs(on.pill[3] - (on.w - 5.5) / 2) < 1', Math.abs(on.pill[3] - (on.w - 5.5) / 2) < 1], ['Math.abs(on.pill[1] - on.iris[2]) < 0.5', Math.abs(on.pill[1] - on.iris[2]) < 0.5], ['on.mast.join() === "0.5,none"', on.mast.join() === "0.5,none"], ['on.sky === "1"', on.sky === "1"], ['on.letter === "1.5px"', on.letter === "1.5px"], ['Math.abs(later.phase - on.phase - 0.05) < 0.02', Math.abs(later.phase - on.phase - 0.05) < 0.02], ['Math.abs(dragged.phase - 0.25) < 0.01', Math.abs(dragged.phase - 0.25) < 0.01], ['Math.abs(dragged.from - 315) < 1', Math.abs(dragged.from - 315) < 1], ['spinning.moving', spinning.moving], ['nowed.pill[2] === 40', nowed.pill[2] === 40], ['Math.abs(nowed.t % 43200 - clock % 43200) < 5', Math.abs(nowed.t % 43200 - clock % 43200) < 5], ['unnowed.pill[2] === 80', unnowed.pill[2] === 80], ['Math.abs(unnowed.t - nowed.t) > 5', Math.abs(unnowed.t - nowed.t) > 5], ['!back.show', !back.show], ['Math.abs(back.z - before.z) < 0.01 && Math.abs(back.c[0] - before.c[0]) < 0.5', Math.abs(back.z - before.z) < 0.01], ['back.bar === "visible"', back.bar === "visible"], ['back.guides === "visible"', back.guides === "visible"], ['back.playing === before.playing', back.playing === before.playing]];
-  check(sc.every((x) => x[1]),
-    sc.filter((x) => !x[1]).map((x) => x[0]).join(' | ') + `the iris switch opens to ACTIVATE SHOWCASE (${opened.words} px), which alone goes in: the bar and switches gone at once, the dial travelling (${going.moving}) to 2/3 of an A4 fitted in the window (${on.dial.toFixed(1)} = ${page_px.toFixed(1)} px), centred, the soft edge back once still; the clock at 1×; the X at the corner, Now (tracked ${on.letter}) on its line; the sun crosses a day in twenty seconds (+${(later.phase - on.phase).toFixed(2)} a second), the arrow hint between the dial and Now and a drag puts it along it (a quarter across: ${dragged.from.toFixed(0)}°); Now spins the hands to now and shrinks to an undo (${nowed.pill[2]} px), which spins them back; the X goes back to where we were`);
-  const mark = await page.evaluate(() => { const h = document.querySelector(".panel .title h1"), look = getComputedStyle(h), probe = document.createElement("span"); probe.style.cssText = "display:inline-block;width:0;height:0"; h.append(probe); const base = probe.getBoundingClientRect().top; probe.remove();
-    const pen = document.createElement("canvas").getContext("2d"); pen.font = `${look.fontWeight} ${look.fontSize} ${look.fontFamily}`; const cap = pen.measureText("D").actualBoundingBoxAscent, ring = document.querySelector("#logo circle").getBoundingClientRect();
-    return +((ring.top + ring.bottom) / 2 - (base - cap / 2)).toFixed(2); });
-  check(Math.abs(mark) < 0.3, `the mark's ring is centred on the title's capitals (${mark} px off; Okay, 04:26: "align icon better")`);
+  await page.click('.tabs button[data-tab="Show dial"]'); await frame();
+  const plates = await page.evaluate(() => { const r = (q) => document.querySelector(q), lines = [...document.querySelectorAll("#app .colourlist .row > label")].filter((l) => l.checkVisibility()).map((l) => l.textContent);
+    return { first: lines[0], plate: Boolean(r("#colour-plate")?.checkVisibility()), disc: Boolean(r("#colour-window-0-disc")?.checkVisibility()) || !window.dial_tool.S.da_on }; });
+  check(plates.first === "Dial" && plates.plate && plates.disc,
+    `show mode's colours start with the Dial's (the plate) and give each window's disc its swatch (${plates.first}; disc ${plates.disc}) (Okay, 23 Oct 2026: "Disk behind each window and plate color")`);
+  { // #545: Colours · Inks · Hands, drawn and locked 25 Oct 2026 ("All colors editable … via different places, through inks and colors. Switch on off for a double color on inks")
+    const r = await page.evaluate(() => { const t = window.dial_tool, S = t.S, q = (s) => document.querySelector(s), all = (s) => [...document.querySelectorAll(s)].filter((e) => e.checkVisibility());
+      const keep = JSON.stringify([S.rings, S.w_inks, S.w_ink_all]);
+      const panes = all(".form > .pane > .fold h2").map((h) => h.textContent);
+      const subs = all(".colourlist > .row.showsub .colhead").map((e) => e.textContent);
+      const colours_boxes = all(".colourlist:not(.inklist) .row.showline.bare .numbox").length;
+      const inks = () => all(".inklist .inkline:not(.disc) .hex").map((e) => e.textContent);
+      const n0 = inks().length;
+      // a ring recoloured in Colours moves to an ink of its own
+      S.rings[0].c = [0.11, 0.62, 0.47, 1]; t.changed(); const n1 = inks().length;
+      // open it, split it, put the ring on B, set B's height
+      const line = all(".inklist .inkline").find((l) => /1C9E78/.test(l.textContent)); line.querySelector(".chev").click();
+      q(".inklist .inkline.open .toggle").click(); const two = S.w_inks["#1C9E78"]?.two === true;
+      const pill = all(".inklist .pillswitch.ab").find(Boolean); pill.lastElementChild.click(); const on_b = S.rings[0].ink_b === true;
+      const b_box = all(".inklist .inkpart input")[0]; b_box.value = "0.33"; b_box.dispatchEvent(new Event("change")); const b_h = S.w_inks["#1C9E78"]?.b;
+      const rights = new Set(all(".inklist .numbox").map((b) => Math.round(b.getBoundingClientRect().right))).size;
+      // the Hands pane: a swatch, a height and the Bevels pills
+      const bevel = q("#bevel-hour"), was = S.ha_hour.bevel; bevel.click(); const flipped = S.ha_hour.bevel !== was; bevel.click();
+      const hands = Boolean(q("#colour-hand-hour-hands")) && Boolean(q("#show-hour-height"));
+      // an ink of two parts: split, the first is A, the second B, the letters as text
+      t.ink_open.clear(); S.rings[0].c = [0.2, 0.3, 0.9, 1]; S.rings[1].c = [0.2, 0.3, 0.9, 1]; S.rings[0].ink_b = S.rings[1].ink_b = false; t.changed();
+      all(".inklist .inkline").find((l) => /334DE6/.test(l.textContent)).querySelector(".chev").click();
+      q(".inklist .inkline.open .toggle").click();
+      const pair = [S.rings[0].ink_b, S.rings[1].ink_b, all(".inklist .inkpart .letter").map((e) => e.textContent).join(""), all(".inklist .pillswitch.ab").length];
+      const head = all(".form > .pane > .colhead").map((e) => e.textContent);
+      // #546: every colour on one swatch column, across Colours, Inks and Hands; the Bevels pills inside the line
+      const lefts = new Set(all(".colourlist > .row.showline").map((l) => l.querySelector(":scope > .colour, :scope > .single, :scope > .swatches, :scope > .swatch")).filter(Boolean).map((e) => Math.round(e.getBoundingClientRect().left))).size;
+      const pills = q(".row.bevels > .pillswitch")?.getBoundingClientRect(), bevel_line = q(".row.bevels")?.getBoundingClientRect();
+      const inside = pills && bevel_line ? pills.right <= bevel_line.right + 0.5 : false;
+      const caps = all(".colourlist > .row.showsub .colhead, .form > .pane > .colhead").some((e) => getComputedStyle(e).textTransform === "uppercase");
+      // the lines' eyes under the panes' own (Okay, 22:02: "Check if pushing eyes to left column work")
+      const head_eye = Math.round(q(".form > .pane .fold .eye").getBoundingClientRect().left), eyes_at = new Set(all(".colourlist > .row.showline > .eye").map((e) => Math.round(e.getBoundingClientRect().left)));
+      const eyes_left = eyes_at.size === 1 && eyes_at.has(head_eye);
+      // #547: a line's show/hide is a dot, not the panes' eye; hidden, the line greys
+      const seen = q(".colourlist > .row.showline > .eye.seen"), was_on = seen.getAttribute("aria-pressed") === "true", eye_drawn = Boolean(seen.querySelector("path"));
+      seen.click(); const greyed = seen.closest(".row").classList.contains("off") !== !was_on || seen.closest(".row").classList.contains("off"); seen.click();
+      const dots = !eye_drawn && Boolean(seen.querySelector("circle")) && greyed;
+      [S.rings, S.w_inks, S.w_ink_all] = JSON.parse(keep); t.ink_open.clear(); t.changed();
+      return { dots, eyes_left, lefts, inside, caps, pair, panes, subs, colours_boxes, n0, n1, two, on_b, b_h, rights, flipped, hands, head }; });
+    await shot("12b-show-dial-tab");
+    check(r.panes.join() === "Colours,Inks,Hands" && r.subs.includes("Rings") && r.subs.includes("Hands") && r.colours_boxes === 0 && r.head.length === 2,
+      `show mode's Dial tab is Colours · Inks · Hands (${r.panes.join(" · ")}), Colours by part under ${r.subs.join(" · ")}, colours only; Inks and Hands headed Height mm (Okay: "Colours · Inks · Hands")`);
+    check(r.n1 === r.n0 + 1 && r.two && r.on_b && Math.abs(r.b_h - 0.33) < 1e-6 && r.rights === 1,
+      `Inks: one line per exact colour (${r.n0}); a ring recoloured in Colours makes an ink of its own (${r.n1}); Two inks splits it, the A | B pill puts the ring on B, B's height its own (${r.b_h} mm); every height box on one right edge (Okay: "One thick red one thin possible via a switch on the pane")`);
+    check(r.pair[0] === false && r.pair[1] === true && r.pair[2] === "AB" && r.pair[3] === 0, `an ink of two parts, split: the first on A, the second on B, the letters as text, no pills (${r.pair.join(" · ")}) (Okay: "Switch stays, but on two item lists leave them text only")`);
+    check(r.lefts === 1 && r.inside && !r.caps && r.eyes_left, `every colour of the tab on one swatch column (${r.lefts}), the group names not in capitals, the Bevels pills inside their line, the lines' eyes under the panes' eyes (Okay: "All colors aligned on a line like rings on main … don't use allcaps everywhere")`);
+    check(r.dots, `a line's show/hide is a dot, filled shown, a ring hidden, the hidden line greyed; the eye only the panes' fold (Okay: "Eyes doing different functions, make the second levels something else?"; "A · dot")`);
+    check(r.hands && r.flipped, `Hands: each hand's colour and height on its line, the Bevels pills turn its bevel (Okay: "colors also editable on hands pane everywhere"; "Bevels % slider plus the pill")`);
+  }
+  const hands = await page.evaluate(() => { const t = window.dial_tool, n = document.querySelector("g.watch [data-h='minute']"), a = n.getAttribute("transform"); t.set_value("global", "t", t.S.t + 600); t.frame(); return [a, n.getAttribute("transform"), document.querySelectorAll("g.watch path").length, n.isConnected]; });
+  await page.evaluate(() => { const t = window.dial_tool; t.set_value("global", "t", t.S.t - 600); t.set_value("global", "bezel", 1); t.set_value("global", "strap", 2); t.frame(); });
+  const diver = await page.evaluate(() => [window.dial_tool.S.bezel, document.querySelectorAll("g.watch path").length]);
+  const column = await page.evaluate(() => { const t = window.dial_tool, panel = document.querySelector(".panel"), sw = document.querySelector("#grey-panel"), before = getComputedStyle(panel).backgroundColor;
+    sw.click(); const grey = getComputedStyle(panel).backgroundColor, pressed = sw.getAttribute("aria-pressed"); sw.click();
+    return { w: Math.round(panel.getBoundingClientRect().width), swatch: sw.checkVisibility(), before, grey, pressed, back: getComputedStyle(panel).backgroundColor === before, key: t.S.ui_grey_panel }; });
+  const was_sun = await page.evaluate(() => [window.dial_tool.S.sh_from, window.dial_tool.S.sh_rise]);
+  const look = await page.evaluate(() => { const t = window.dial_tool, r = (q) => document.querySelector(q), [w, h] = t.size(), svg = t.svg.getBoundingClientRect(), panel = r(".panel").getBoundingClientRect();
+    return { shown: ["#undo", "#versions"].every((q) => r(q).checkVisibility() && r(q).getBoundingClientRect().left < 200), gone: ["#guides", "#guides-more", "#shadows", "#shadows-more"].every((q) => !r(q).checkVisibility()),
+      title: getComputedStyle(r(".title h1"), "::after").content, header: ["#to-gallery", "#unit"].every((q) => !r(q).checkVisibility()), under: svg.right > panel.left + 100, w: Math.round(w), left: Math.round(panel.left - svg.left),
+      sign: getComputedStyle(r(".tabs button.on .sign")).color }; });
+  await page.mouse.move(200, 200); await page.mouse.down(); await page.mouse.move(180, 180, { steps: 3 }); await page.mouse.up(); await frame();
+  const sun = await page.evaluate(() => [window.dial_tool.S.sh_from, window.dial_tool.S.sh_rise]);
+  await page.evaluate((v) => { const t = window.dial_tool; t.set_value("global", "sh_from", v[0]); t.set_value("global", "sh_rise", v[1]); }, was_sun);
+  check(look.shown && look.gone && look.title === '" Show Case"' && look.header && look.under && look.w === look.left && look.sign !== "rgb(0, 0, 0)" && (sun[0] !== was_sun[0] || sun[1] !== was_sun[1]) && sun[0] > 270 && sun[0] < 360,
+    `show mode, as the Show Case had it (Okay, 23 Oct 2026): undo · redo · Versions at the canvas's top left; no Guides, no Shadows; the title Dial Tool Show Case with Help and the swatch alone; the canvas runs on under the see-through column, the watch centred in the ${look.w} px left of it; the chosen tab's sign in the column's colour (${look.sign}); a drag on the canvas moves the sun (${was_sun} → ${sun})`);
+  const shen = await page.evaluate(() => { const t = window.dial_tool, K = ["sh_on", "sh_blur", "w_bevels", "w_flare_on", "w_gradients"], was = K.map((k) => t.S[k]), rows = [...document.querySelectorAll(".shenticks > .row")];
+    const press = (name) => rows.find((r) => r.querySelector("label").textContent === name).querySelector(".toggle").click();
+    K.forEach((k) => t.set_value("global", k, true)); press("All"); const off = K.map((k) => t.S[k]).join(" "), dark = rows.every((r) => r.classList.contains("off")); press("All"); const on = K.map((k) => t.S[k]).join(" "); press("Blurs"); const blur = t.S.sh_blur;
+    K.forEach((k, i) => t.set_value("global", k, was[i]));
+    return { names: rows.map((r) => r.querySelector("label").textContent).join(" · "), pills: rows.every((r) => r.querySelector(".toggle") && !/On|Off/.test(r.textContent)), lines: rows.slice(0, 5).every((r) => getComputedStyle(r).boxShadow === "none") && getComputedStyle(rows[5]).borderLeftStyle === "none", spots: rows.map((r) => { const b = r.getBoundingClientRect(); return `${Math.round(b.left)},${Math.round(b.top)}`; }), off, on, blur, dark }; });
+  const at = (n) => shen.spots[n].split(",").map(Number), two = new Set(shen.spots.map((p) => p.split(",")[1])).size === 2 && at(4)[1] === at(0)[1] && at(5)[1] === at(2)[1] && at(5)[0] === at(4)[0];
+  check(shen.names === "Shadows · Blurs · Flare · Bevels · Gradients · All" && shen.pills && shen.lines && two && shen.dark && shen.off === "false false false false false" && shen.on === "true true true true true" && shen.blur === false,
+    `Shenanigans (#525; Okay, 24 Oct 2026, 19:04: "On off does not need to be written down. A dot travels"): ${shen.names}, each a toggle with no words, on two lines — Shadows · Blurs · Gradients, Flare · Bevels · All — no bar (19:57: "Remove vertical white bar"); off, the names go dark; All turns the five off (${shen.off}) and on (${shen.on})`);
+  const nato = await page.evaluate(async () => { const t = window.dial_tool, was = [t.S.strap, t.S.w_nato, t.S.c_nato], w = (ms) => new Promise((r) => setTimeout(r, ms));
+    document.querySelector('button[data-tab="Watch"]').click(); await w(100); t.set_value("global", "strap", 3); t.set_value("global", "w_nato", 0); await w(100);
+    const seen = () => [...document.querySelectorAll(".panel .row.col")].filter((r) => r.offsetParent).map((r) => r.querySelector("label").textContent).filter((n) => /Stripe|^Colour$/.test(n)).join(" ");
+    const pills = [...document.querySelectorAll(".panel .pillswitch.free")].find((g) => g.textContent.includes("Regimental")).children.length, three = seen();      // the Pattern row's own (the Strap row is free pills too, 4.94.20; the Guides foot has three, #539)
+    [...document.querySelectorAll(".panel .pillswitch.free > button")].find((b) => b.textContent === "Solid").click(); await w(100); const one = seen();
+    const row = [...document.querySelectorAll(".panel .row.col")].find((r) => r.offsetParent && r.querySelector("label").textContent === "Colour");
+    const id = row.querySelector("button").id; t.pop_open(t.colour_of_row(t.rows.find((r) => r.el === row).row), row.querySelector("button")); t.pop.at.write([1, 0, 0, 1]); t.pop_close(); const c = JSON.stringify(t.S.c_nato);
+    t.set_value("global", "strap", was[0]); t.set_value("global", "w_nato", was[1]); t.set_value("global", "c_nato", was[2]);
+    return { pills, three, one, c, id }; });
+  check(nato.pills === 7 && nato.three === "Stripe 1 Stripe 2 Stripe 3" && nato.one === "Colour" && nato.c === "[[1,0,0,1],[1,0,0,1],[1,0,0,1]]",
+    `the NATO (#524; Okay, 24 Oct 2026: "Nato colors should be selectable. One solid option. Options can be free living single pills"): ${nato.pills} pills of their own, Solid last; a pattern's three stripes each a swatch (${nato.three}); Solid one swatch (${nato.one}) that colours all three (${nato.c})`);
+  const was_ground = await page.evaluate(() => [window.dial_tool.S.c_backdrop, window.dial_tool.S.c_backdrop2]);
+  await page.click("#logo", { force: true }); const bio = await page.evaluate(() => document.querySelector("#bio").hidden);
+  await page.click("#backdrop"); await page.click('.groundtile[title="Ember"]'); await frame();
+  const ground = await page.evaluate(() => { const t = window.dial_tool, r = (q) => document.querySelector(q); return { open: !r("#ground-pop").hidden, tiles: document.querySelectorAll(".groundtile:not(.add):not(.auto)").length, auto: Boolean(document.querySelector(".groundtile.auto")), adds: document.querySelectorAll(".groundtile.add").length, square: (() => { const a = document.querySelector("#ground-colours .groundtile").getBoundingClientRect(), b = document.querySelector("#ground-gradients .groundtile").getBoundingClientRect(); return Math.abs(a.height - b.height) < 0.5 && b.width > 2 * a.width; })(), two: Boolean(t.S.c_backdrop2), version: r(".title > .quiet:not(.help)").checkVisibility() }; });
+  await page.click('.tabs button[data-tab="Watch"]'); await page.click('.pickt[title="Field"]'); await frame();
+  const tiles = await page.evaluate(() => ({ bezel: window.dial_tool.S.bezel, cases: [...document.querySelectorAll('#app .pickt')].filter((b) => b.checkVisibility() && b.querySelector("svg path")).length }));
+  await page.evaluate((g) => { const t = window.dial_tool; t.set_value("global", "c_backdrop", g[0]); t.set_value("global", "c_backdrop2", g[1]); t.ground_open(false); }, was_ground);
+  check(bio && ground.open && ground.tiles === 20 && ground.auto && ground.adds === 2 && ground.square && ground.two && !ground.version && tiles.bezel === 2 && tiles.cases >= 4,
+    `show mode's title has no version and its mark opens no bio; Backdrop opens Auto, the ten colours and the ten gradients (${ground.tiles} tiles; Ember a gradient), a + for each (#510; Okay, 25 Oct 2026: "Make the all swatches same, large size, gradents are 2x blocks of the same single swatch": a gradient as tall as a colour, wider than two: ${ground.square}); Case is picture tiles (${tiles.cases}), Field pressed`);
+  { // show mode's eye (Okay, 25 Oct 2026: "Eye hides bar too"; "Dial tool header stays on collapsed panels on show case same as main")
+    const at = () => page.evaluate(() => { const r = (q) => document.querySelector(q).getBoundingClientRect(); return { title: Math.round(r(".mast").left), edge: Math.round(innerWidth - r(".mast").right), bar: Math.round(r(".bar").top) }; });
+    const before = await at(); await page.click("#eye-box"); await page.waitForTimeout(1500); const alone = await at(), h = await page.evaluate(() => innerHeight);
+    await page.click("#eye-box"); await page.waitForTimeout(1500); const after = await at();
+    const edge = alone.edge;
+    check(alone.bar >= h - 1 && edge === 16 && after.bar === before.bar && after.title === before.title,
+      `show mode's eye: the bar slides out (its top ${before.bar} → ${alone.bar} of ${h}) and the title goes flush right, ${edge} px from the edge (Okay: "on right name needs to stay flush right sadly, an exception"); both back after (${after.bar}, ${after.title})`);
+  }
+  { // the diver's two bracelets, closed round a wrist (#529; Okay, 25 Oct 2026: "Links add. Bracelets viewed ad closed … Not for other straps")
+    const was = await page.evaluate(() => [window.dial_tool.S.bezel, window.dial_tool.S.strap]);
+    await page.evaluate(() => { const t = window.dial_tool; t.set_value("global", "bezel", 1); t.set_value("global", "strap", 4); t.changed(); });
+    await page.click('.tabs button[data-tab="Watch"]'); await frame();
+    const got = await page.evaluate(() => { const g = [...document.querySelectorAll(".panel .pillswitch")].find((p) => p.textContent.includes("Links")), pr = g.getBoundingClientRect();
+      const inside = [...g.children].filter((b) => b.checkVisibility()).every((b) => { const r = b.getBoundingClientRect(); return r.left >= pr.left - 0.5 && r.right <= pr.right + 0.5; });      // no choice scrolled off the pill's end
+      const words = [...g.children].filter((b) => b.checkVisibility()).map((b) => b.textContent.trim());
+      return { links: words.includes("Links") && words.includes("Bracelet") && inside && g.scrollWidth <= g.clientWidth + 1, drawn: window.dial_tool.watch_g.innerHTML.length > 1000 }; });
+    await page.evaluate((w) => { const t = window.dial_tool; t.set_value("global", "bezel", w[0]); t.set_value("global", "strap", w[1]); }, was);
+    check(got.links && got.drawn, `the diver offers Bracelet and Links, every choice in view (${got.links}), the links drawn (${got.drawn})`);
+  }
+  { // show mode's top as main's (Okay, 25 Oct 2026, 18:05: "Show mode and main tops, missing bar and alignments check, main looks correct"): the title line main's height, the tabs' hairline drawn, on the undo buttons' bottom
+    const top = await page.evaluate(() => { const R = (q) => document.querySelector(q).getBoundingClientRect(), c = getComputedStyle(document.querySelector(".tabs"));
+      return { header: Math.round(R(".panel > header").height), line: Math.round(R(".tabs").top), undo: Math.round(R("#undo").bottom), drawn: c.backgroundImage.startsWith("linear-gradient") }; });
+    check(top.header === 43 && top.line === top.undo - 1 && top.drawn, `show mode's top as main's: the title line ${top.header} high, the tabs' hairline drawn (${top.drawn}) on the undo buttons' bottom (${top.line} / ${top.undo})`);
+  }
+  { // the Light tab's sun box (Okay, 25 Oct 2026, four drawn rounds, "sun locked"): an outline with sharp corners, the sun's
+    // picture centred in the open space, Angle · Height · Strength as plain values flush left on the number boxes' line;
+    // the three as ordinary rows under it, Darkness named Strength; a drag in the picture moves the sun, the values follow
+    await page.click('.tabs button[data-tab="Light"]'); await frame();
+    const sb = await page.evaluate(() => { const t = window.dial_tool, R = (e) => e.getBoundingClientRect(), box = document.querySelector(".sunbox"), pic = box.querySelector(".sunpic"), d = R(box.querySelector(".dial")), p = R(pic), c = getComputedStyle(box);
+      const rows = [...document.querySelectorAll(".panel .row.num")].filter((e) => e.checkVisibility()).slice(0, 3), names = rows.map((e) => e.querySelector("label").textContent), lefts = [...box.querySelectorAll(".sunvalue")].map((e) => Math.round(R(e).left));
+      const was = [t.S.sh_from, t.S.sh_rise], cx = (d.left + d.right) / 2, cy = (d.top + d.bottom) / 2;
+      const ev = (type) => pic.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: cx + d.width / 2, clientY: cy, pointerId: 1, pointerType: "mouse", button: 0 }));
+      ev("pointerdown"); ev("pointerup"); const moved = [t.S.sh_from, t.S.sh_rise], fig = box.querySelector(".sunvalue .figure").textContent;
+      t.set_value("global", "sh_from", was[0]); t.set_value("global", "sh_rise", was[1]);
+      return { sharp: c.borderRadius === "0px" && c.outlineStyle === "solid", centred: Math.abs((d.left + d.right) / 2 - (p.left + p.right) / 2) < 0.5 && Math.abs((d.top + d.bottom) / 2 - (p.top + p.bottom) / 2) < 0.5,
+        lefts, numbox: Math.round(R(rows[0].querySelector(".numbox > .steps")).left), plain: !box.querySelector("input, button"), names, moved, fig }; });
+    check(sb.sharp && sb.centred && sb.lefts.every((x) => x === sb.numbox) && sb.plain && sb.names.join(" · ") === "Angle ° · Height ° · Strength %" && sb.moved[0] === 90 && sb.fig === "90°",
+      `the Light tab's sun box: sharp outline, the picture centred in its space, the values flush left on the minuses' line (${sb.lefts.join(" ")} / ${sb.numbox}; Okay, 18:01: "align with the minuses boxes from below"), not editable, the rows under it ${sb.names.join(" · ")}; a press at the dial's east edge puts the sun at ${sb.moved.join("° · ")} and the value says ${sb.fig} (Okay, 25 Oct 2026: "Labels numbers stack flush left, not editable")`);
+  }
+  await page.evaluate(() => { const t = window.dial_tool; t.set_value("global", "bezel", 0); t.set_value("global", "strap", 1); });
+  await page.click("#iris-box"); await page.waitForTimeout(2400);
+  const off = await q();
+  const swatch_off = await page.$eval("#grey-panel", (e) => e.checkVisibility());
+  check(column.w < 400 && column.swatch && column.grey === "rgb(33, 33, 33)" && column.pressed === "true" && column.back && column.key === false && !swatch_off,
+    `show mode's column is the Show Case's width (${column.w} px, the tool's panel wider) with the round swatch at the title line's end: pressed, the panel in greys (${column.grey}, as the bar), pressed again, the backdrop's colour; on the dial side no swatch (R16)`);
+  check(!home.on && !home.showing && home.sky === false && on.on && on.showing && !on.away && on.right && on.tabs === "Show dial Watch Light Show export" && on.watch > 0 && on.dial === "none" && on.bar === "visible" && on.tinted && !on.case_box && on.z !== z0,
+    `show mode: the panel comes back on the right with the show tabs (${on.tabs}), tinted by the backdrop; the watch drawn (${on.watch} group), the dial's own drawing away, the bar in place, Fit on the case (${z0.toFixed(2)} → ${on.z.toFixed(2)}); the old Showcase's sky gone`);
+  check(hands[0] !== hands[1] && hands[2] > 100 && hands[3] && diver[0] === 1 && diver[1] > hands[2] && !off.on && !off.showing && off.tabs === "Dial Rings Hands Date Export" && !off.right && off.watch === 0 && off.dial !== "none" && !off.tinted && Math.abs(off.z - z0) < 1e-6,
+    `the hands turn in place with the time (${hands[2]} paths; the minute hand's transform moved, the drawing not made again); the Watch tab's case switches the watch (Diver with its bracelet, ${diver[1]} paths); out: the panel back on the left with its tabs, the watch gone, the view as it was`);
 }
+
 { // Okay's mark opens the bio; the eye switch, at the preview's bottom right, turns on and off and does nothing else (15 Oct 2026)
   const before = await S("JSON.stringify(S, (k, v) => (k.startsWith('ui_') || k === 't' ? undefined : v))");
   await page.click("#logo");
@@ -2127,7 +2537,7 @@ await shot("10-bar");
       contact: b.querySelector("p:first-child a[href='#contact']")?.textContent, bare: /[\w.]+@[\w-]+\.\w+/.test(document.documentElement.outerHTML), turned: getComputedStyle(document.querySelector("#logo")).backgroundColor }; });
   await page.mouse.click(1300, 120);
   const shut = await page.isHidden("#bio");
-  const eye_at = await page.evaluate(() => { const m = document.querySelector("main").getBoundingClientRect(), e = document.querySelector("#eye-box").getBoundingClientRect(), inset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--canvas-inset")); return Math.round(m.right - e.right) === inset && Math.round(m.bottom - e.bottom) === inset && document.querySelectorAll("#eye-box mask, #eye-box circle").length === 2; });
+  const eye_at = await page.evaluate(() => { const m = document.querySelector("main").getBoundingClientRect(), e = document.querySelector("#eye-box").getBoundingClientRect(), inset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--canvas-inset")); const i = document.querySelector(".irisbox").getBoundingClientRect(); return Math.round(m.right - e.right) === inset && Math.round(e.bottom) <= Math.round(i.top) && Math.round(m.bottom - i.bottom) === inset && document.querySelectorAll("#eye-box mask, #eye-box circle").length === 2; });
   // the dial alone (Okay, 15 Oct 2026, 04:02): the panel slides away, the bar stays, the mast stays, Backdrop and Shadows
   // stop on the mark's line, undo · redo after the title, the dial fitted in the whole preview; and back
   const where = () => page.evaluate(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(), t = window.dial_tool;
@@ -2143,7 +2553,7 @@ await shot("10-bar");
       && back.panel === here.panel && back.main === here.main && back.undo === here.undo && back.back === here.back,
     `the eye switch, on: the dial alone — the panel slid away (${gone.panel}), the mark and title stay (${gone.mast}), Backdrop and Shadows stop on the mark's line (${gone.back}), undo · redo after the title (${gone.undo}), the bar as it was, the dial fitted and centred (×${(gone.z / here.z).toFixed(2)}); the switch filled (${gone.fill}); off, all back`);
   check(bio.shown && shut && bio.links.includes("HarfBuzz") && bio.links.includes("github.com/duztman/dial-tool") && bio.logo_left === 24 && bio.title_left === 52 && bio.text_left === 52 && bio.heads === 0 && bio.contact === "here" && !bio.bare && bio.turned === "rgb(20, 20, 19)" && eye_at && eye_on === "true" && await page.getAttribute("#eye-box", "aria-pressed") === "false" && await S("JSON.stringify(S, (k, v) => (k.startsWith('ui_') || k === 't' ? undefined : v))") === before,
-    `Okay's mark in the first column (${bio.logo_left}; the title at ${bio.title_left}) turns over on a night disc (${bio.turned}) and opens the bio, no title of its own, its text on the title's line (${bio.text_left}), with its links (${bio.links.length}), its first paragraph ending "Contact him here" — no address anywhere in the page; a press outside shuts it; the eye switch, alone at the preview's bottom right (${eye_at}), turns on and off, nothing more`);
+    `Okay's mark in the first column (${bio.logo_left}; the title at ${bio.title_left}) turns over on a night disc (${bio.turned}) and opens the bio, no title of its own, its text on the title's line (${bio.text_left}), with its links (${bio.links.length}), its first paragraph ending "Contact him here" — no address anywhere in the page; a press outside shuts it; the eye switch, at the preview's bottom right over show mode's (${eye_at}), turns on and off, nothing more`);
 }
 { // the window never zooms, only the dial (Okay, 15 Oct 2026, 02:19)
   const still = await page.evaluate(() => { const wheel = new WheelEvent("wheel", { ctrlKey: true, deltaY: -40, bubbles: true, cancelable: true }); document.querySelector(".panel").dispatchEvent(wheel);
@@ -2152,49 +2562,63 @@ await shot("10-bar");
   await page.mouse.move(1000, 400); await page.keyboard.down("Control"); await page.mouse.wheel(0, -100); await page.keyboard.up("Control"); await frame();
   check(still[0].includes("user-scalable=no") && still[1] === "pan-x pan-y" && still[2] && await S("t.z") > z0, `the window doesn't zoom (a pinch on the panel is refused; ${still[1]}), the dial still does`);
 }
-{ // the showcase's 10:10 and hands key (Okay, 15 Oct 2026, 07:40): 10:10 beside Now, the gap between them on the centre line; the one pressed turns into the undo sign, the other stays put; the hands key at the bottom left hides the hands in the showcase only
-  await page.click("#iris-box"); await page.waitForTimeout(300); await page.click("#iris-go"); await page.waitForTimeout(1600);
-  const at = () => page.evaluate(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(), t = window.dial_tool; return { now: [r("#show-now").left, r("#show-now").right, r("#show-now").width], ten: [r("#show-ten").left, r("#show-ten").width], key: [r("#hands-key").left, r("#hands-key").bottom, r("#hands-key").width, getComputedStyle(document.querySelector("#hands-key")).borderRadius], x: r(".irisbox").bottom, w: innerWidth, t: t.S.t, hands: t.items.filter((i) => i.role === "hand").length }; });
-  const a = await at();
-  await page.click("#show-ten"); await page.waitForTimeout(1900);
-  const b = await at();
-  await page.click("#show-ten"); await page.waitForTimeout(1900);
-  await page.click("#hands-key"); await page.waitForTimeout(200);
-  const c = await at();
-  await page.click("#iris-box"); await page.waitForTimeout(1300);
-  const d = await page.evaluate(() => [window.dial_tool.S.ha_on, window.dial_tool.items.filter((i) => i.role === "hand").length]);
-  const ok = [Math.abs((a.now[1] + a.ten[0]) / 2 - a.w / 2) < 0.6, a.ten[1] > a.now[2], b.t % 43200 - 36600 >= 0 && b.t % 43200 - 36600 < 4, b.ten[1] === 40, b.now[0] === a.now[0] && b.now[2] === a.now[2], b.ten[0] === a.ten[0],
-    c.key[0] === 24 && Math.abs(c.key[1] - c.x) < 0.5 && c.key[2] === 40 && c.key[3] === "50%", c.hands === 0, d[0] === true && d[1] > 0];
-  check(ok.every(Boolean), `the showcase's 10:10: beside Now, the gap on the centre line; pressed, the hands to 10:10 and it turns undo while Now stays put; the hands key round at the bottom left, across from the X, hiding the hands in the showcase only (${ok.join(" ")})`);
+{ // a hand's own Bevel tick beside Show, from the moment Show is on, off to start; on, its hand bevelled at Bevels %; and the cap in the seconds hand's picture (4.89.1; Okay, 20 Oct 2026, 01:33: "bevel appears as soon as show tick turned on")
+  const r = await page.evaluate(() => {
+    const t = window.dial_tool, S = t.S, was = [S.ui_hand, S.ui_section, S.ha_second.on, S.ha_hour.bevel, S.ha_hour.on];
+    const tick = () => [...document.querySelectorAll(".form label.check")].some((l) => l.textContent.trim() === "Bevel" && l.offsetParent && l.closest(".showline"));
+    const op = () => [...document.querySelectorAll("g[clip-path='url(#bevel-clip-hour)'] rect")].map((x) => +x.getAttribute("fill-opacity"));
+    S.ui_section = 2; t.show_section(); S.ha_second.on = true; S.ui_hand = 0; t.sync_rows(); t.frame();
+    const shown = tick(), off = !S.ha_hour.bevel && op().every((v) => v === 0);
+    t.set_value("hand", "on", false); t.sync_rows(); const gone = !tick(); t.set_value("hand", "on", true); t.sync_rows();
+    t.set_value("hand", "bevel", true); t.frame();
+    const lit = op().some((v) => v > 0);
+    t.set_value("hand", "bevel", false); t.frame();
+    const cap_hour = !!document.querySelector("#hand-detail .cap");
+    S.ui_hand = 2; t.sync_rows();
+    const cap_second = !!document.querySelector("#hand-detail .cap");
+    S.ha_hour.bevel = was[3]; S.ha_second.on = was[2]; S.ui_hand = was[0]; S.ui_section = was[1]; t.show_section(); t.sync_rows();
+    return { shown, off, gone, lit, cap_hour, cap_second };
+  });
+  check(r.shown && r.off && r.gone && r.lit && !r.cap_hour && r.cap_second,
+    `a hand's Bevel beside Show while it is shown (${r.shown}; hidden with Show off: ${r.gone}), off to start (${r.off}), on: its hand bevelled (${r.lit}); the cap in the seconds hand's picture (${r.cap_second}), not the hour's (${!r.cap_hour})`);
 }
-{ // the showcase's light (4.77, #351, #354): a very dim backdrop still makes a spotlight (its colour lifted); a ring of shine, three bands, moves with the sun; each hand's bevel, a lighter and a darker half; the showcase's shadows a touch darker; out of the showcase the bevels stay, the shine goes
-  const was = await page.evaluate(() => JSON.stringify([window.dial_tool.S.c_backdrop, window.dial_tool.S.c_plate]));
-  const no_bevels = await page.evaluate(() => { const t = window.dial_tool; t.frame(); return [t.S.sh_bevel, document.querySelectorAll("g[clip-path^='url(#bevel-clip-'] rect").length]; });      // off to start (4.79)
-  await page.evaluate(() => { const t = window.dial_tool; t.set_value("global", "sh_bevel", 100); t.set_value("global", "c_backdrop", [0.05, 0.05, 0.06, 1]); t.set_value("global", "c_plate", [0.08, 0.09, 0.12, 1]); });
-  await page.click("#iris-box"); await page.waitForTimeout(300); await page.click("#iris-go"); await page.waitForTimeout(1600);
-  const look = async (phase) => page.evaluate((ph) => { const t = window.dial_tool; t.show.phase = ph; t.show.dragging = true; t.render(); t.frame();
-    const band = document.querySelector('#shine-clip') && [...document.querySelectorAll("g[clip-path='url(#shine-clip)'] rect")], gr = document.querySelector("#shine-light");
-    return { bands: band ? band.length : 0, stops: gr ? gr.querySelectorAll("stop").length : 0, at: gr ? `${gr.getAttribute("cx")} ${gr.getAttribute("cy")} r ${gr.getAttribute("r")}` : "", pool: document.querySelector("#show-light stop").getAttribute("stop-color"), bevels: document.querySelectorAll("g[clip-path^='url(#bevel-clip-'] rect").length }; }, phase);
-  const morning = await look(0.2), evening = await look(0.8);
-  await page.click("#iris-box"); await page.waitForTimeout(1300);
-  const after = await page.evaluate(() => [document.querySelectorAll("g[clip-path='url(#shine-clip)'] rect").length, document.querySelectorAll("g[clip-path^='url(#bevel-clip-'] rect").length]);
-  await page.evaluate((w) => { const t = window.dial_tool, v = JSON.parse(w); t.set_value("global", "c_backdrop", v[0]); t.set_value("global", "c_plate", v[1]); t.set_value("global", "sh_bevel", 0); }, was);
-  check(no_bevels.join() === "0,0" && morning.bands === 2 && morning.stops >= 9 && morning.at !== evening.at && morning.pool !== "#0D0D0F" && morning.bevels >= 4 && after[0] === 0 && after[1] >= 4,
-    `the showcase's light: a dim backdrop's spotlight lifted (${morning.pool}); a ring of shine, its light and dark bands two gradients of ${morning.stops} stops, moving with the sun (${morning.at} → ${evening.at}) (4.83); ${morning.bevels / 2} hands bevelled; out of it the shine goes, the bevels stay (${after.join(" ")}); Bevels % at 0 to start: none drawn (${no_bevels.join(" ")})`);
+{ // every menu opens the tool's own list, a press anywhere on its box, never folding its pane (Okay, 20 Oct 2026, 01:05: "clicking 'centre' activates dropdown not collapse"; "the popping up thing on these, styled like mm dropdown. all around the site")
+  const was = await page.evaluate(() => { const t = window.dial_tool; return [t.S.ui_section, t.S.ui_ring]; });
+  await page.evaluate(() => { const t = window.dial_tool; t.S.ui_section = 1; t.show_section(); t.sync_rows(); const p = document.querySelector("#resize-from").closest(".pane"); if (p.classList.contains("folded")) t.fold(t.rows.find((r) => r.el === p), false); });
+  await page.click("#resize-from"); await page.waitForTimeout(100);
+  const open = await page.evaluate(() => { const L = document.querySelector("#menu-list"), box = document.querySelector("#resize-from").closest(".menubox").getBoundingClientRect(), l = L.getBoundingClientRect(); return [L.hidden, L.classList.contains("unitmenu"), Math.round(l.top - box.bottom), l.width >= box.width - 0.5, document.querySelector("#resize-from").closest(".pane").classList.contains("folded"), L.querySelectorAll("button").length]; });
+  await page.click("#menu-list button:nth-child(2)"); await page.waitForTimeout(100);
+  const after = await page.evaluate(() => [document.querySelector("#menu-list").hidden, document.querySelector(".fromwords").textContent, document.querySelector("#resize-from").selectedIndex]);
+  await page.evaluate((w) => { const t = window.dial_tool; t.set_value("ring", t.ring().kind === 2 ? "anchor" : "from", 0); t.S.ui_section = w[0]; t.S.ui_ring = w[1]; t.show_section(); t.sync_rows(); }, was);
+  check(!open[0] && open[1] && open[2] > 0 && open[3] && !open[4] && open[5] === 3 && after[0] && after[2] === 1 && after[1] === (await page.evaluate(() => document.querySelector("#resize-from").options[1].textContent)),
+    `a menu opens the tool's list (the unit box's look) ${open[2]} under its box, as wide, its pane not folded; a choice sets it, says it (${after[1]}) and closes the list`);
 }
-{ // the showcase's Now (Okay, 15 Oct 2026, 07:36): the hour hand one turn clockwise, the minute hand one anticlockwise, the seconds the short way; halfway through the spin (eased, so half the way)
-  const half = await page.evaluate(() => { const t = window.dial_tool, kept = t.show, items = ["hour", "minute", "second"].map((name) => ({ role: "hand", name, angle: 100 }));
-    t.show = { spin: { from: [90, 110, 350], way: 1, t0: performance.now() - 800 } }; t.spin_hands(items); t.show = kept; return items.map((i) => i.angle); });
-  const want = [90 + (10 + 360) / 2, 110 - (10 + 360) / 2, 350 + 110 / 2];
-  check(half.every((a, i) => Math.abs(a - want[i]) < 4), `Now in the showcase: hour clockwise, minute anticlockwise, one turn each; seconds the short way (${half.map((a) => a.toFixed(1)).join(" ")} ≈ ${want.join(" ")})`);
+{ // the Show box's ticks on their words' middles; the date popup's gaps the bar's own, date to NOW (Okay, 20 Oct 2026, 00:06, two pictures marked: "Why are you breaking things and not understanding me?")
+  const r = await page.evaluate(async () => {
+    const t = window.dial_tool, S = t.S, was = [S.sh_bevel, S.ui_section];
+    S.ui_section = 2; t.show_section(); t.sync_rows();
+    const mids = [...document.querySelectorAll(".form > .showbox .check")].filter((c) => c.offsetParent).map((c) => { const i = c.querySelector("input").getBoundingClientRect(), g = document.createRange(); g.selectNodeContents(c.lastChild); const w = g.getBoundingClientRect(); return Math.abs((i.top + i.bottom) / 2 - (w.top + w.bottom) / 2); });
+    document.querySelector(".bar .date").click(); await new Promise((f) => setTimeout(f, 100));
+    const boxes = [...document.querySelectorAll("#date-pop .popline > :is(.popgroup, .popsteps)")].map((e) => e.getBoundingClientRect()), gaps = boxes.slice(1).map((b, k) => +(b.left - boxes[k].right).toFixed(2));
+    const d = document.querySelector(".bar .date").getBoundingClientRect(), n = [...document.querySelectorAll(".bar button")].find((b) => /now/i.test(b.textContent)).getBoundingClientRect();
+    t.date_pop_open(false); t.set_value("global", "sh_bevel", was[0]); S.ui_section = was[1]; t.show_section(); t.sync_rows();
+    return { mids, gaps, bar: +(n.left - d.right).toFixed(2) };
+  });
+  check(r.mids.length === 2 && r.mids.every((m) => m < 1.5) && r.gaps.join(" ") === "2 2 4", `the Show box's two ticks on their words' middles (${r.mids.map((m) => m.toFixed(1)).join(" ")}); the date popup's gaps as Okay drew them, 2 between boxes, 4 before − + (${r.gaps.join(" ")}; 20 Oct 2026, 01:05)`);
 }
 { // what stays put ends on the thick line on every tab (Okay, 15 Oct 2026, 06:20)
   const ends = [];
   for (const name of ["Dial", "Rings", "Hands", "Date", "Export"]) { await tab(name); ends.push(await page.$eval(".pinned", (e) => { const c = getComputedStyle(e); return [c.borderBottomWidth, c.borderBottomColor, c.backgroundImage, c.backgroundSize, c.backgroundOrigin].join(" "); })); }
   const twice = await page.$eval(".pinned", (e) => 2 * parseFloat(getComputedStyle(e).paddingLeft));
-  check(ends.every((x) => x === `2px rgba(0, 0, 0, 0) linear-gradient(rgb(17, 17, 17) 0px, rgb(17, 17, 17) 0px) calc(100% - ${twice}px) 2px border-box`), `every tab's pinned part ends on the thick line, inside the margins (Okay, 07:29) (${[...new Set(ends)].join(" · ")}); FIT in capitals at 12 (${await page.$eval("#fit > span", (e) => getComputedStyle(e).textTransform + " " + getComputedStyle(e).fontSize)})`);
+  check(ends.every((x) => x === `2px rgba(0, 0, 0, 0) linear-gradient(rgb(17, 17, 17) 0px, rgb(17, 17, 17) 0px) calc(100% - ${twice}px) 2px border-box`), `every tab's pinned part ends on the thick line, inside the margins (Okay, 07:29) (${[...new Set(ends)].join(" · ")})`);
 }
 await page.setViewportSize({ width: 390, height: 844 });
+{ // a phone: Fit alone, its four corners and its own left line, its right edge on the eye switch's (Okay, 25 Oct 2026: "Fit square alone, same right edge"; #453)
+  await frame();
+  const f = await page.evaluate(() => { const r = (q) => document.querySelector(q).getBoundingClientRect(), c = getComputedStyle(document.querySelector("#fit"));
+    return { hidden: ["#zoom-out", "#zoom-in"].every((q) => r(q).width === 0), edge: +(r("#eye-box").right - r("#fit").right).toFixed(1), left: c.borderLeftWidth + " " + c.borderLeftStyle, round: c.borderTopLeftRadius === c.borderBottomRightRadius && c.borderTopLeftRadius !== "0px" }; });
+  check(f.hidden && f.edge === 0 && f.left === "1px solid" && f.round, `a phone: Fit alone, its own left line, all four corners, its right edge on the eye switch's (${JSON.stringify(f)})`);
+}
 await tab("Rings");
 await frame();
 const narrow = await page.evaluate(() => ({ wide: document.documentElement.scrollWidth, eye: document.querySelector(".form button.fold .eye").getBoundingClientRect().left, bar: document.querySelector(".bar").getBoundingClientRect().top }));
@@ -2219,7 +2643,7 @@ check(narrow.wide <= 390 && narrow.eye >= 0 && narrow.bar === 0, "a phone: nothi
   await page.click("#fit");      // the dial was zoomed in above: fitted, the backdrop's corners are free
   await page.waitForTimeout(3500);      // anything unfolded by the taps before folds back first
   const folded = await g();
-  const spot = await page.evaluate(() => { const r = document.querySelector("main").getBoundingClientRect(); return [r.left + 40, r.top + 60]; });      // a corner of the backdrop, off the dial
+  const spot = await page.evaluate(() => { const r = document.querySelector("main").getBoundingClientRect(), v = document.querySelector("#versions").getBoundingClientRect(); return [r.left + 40, v.bottom + 16]; });      // a corner of the backdrop, off the dial, under undo and Versions (#435)
   await page.mouse.click(spot[0], spot[1]); await page.waitForTimeout(600);
   const open = await g();
   await page.waitForTimeout(3300);
@@ -2242,12 +2666,12 @@ await page.click('.form .fold:visible >> nth=0', { position: { x: 12, y: 12 } })
 { // a phone (4.68; Okay, 18 Oct 2026, 22:35): the controller at three quarters ("Controller too big on the phones, 75% scale"); a hand's rows give the slider all the room between the name and the box ("Hands sliders squeezed, use all row width")
   await tab("Dial"); await page.$eval('label[for="global-dial-d-Diameter"]', (e) => e.scrollIntoView({ block: "center" }));
   await page.click('label[for="global-dial-d-Diameter"]'); await page.waitForTimeout(200);
-  const pop = await page.evaluate(() => { const v = document.querySelector("#value-pop"), w = v ? v.getBoundingClientRect().width : 0; window.dial_tool.value_pop_close(); return w; });
+  const [pop, span] = await page.evaluate(() => { const v = document.querySelector("#value-pop"), w = v ? v.getBoundingClientRect().width : 0, pad = v ? parseFloat(getComputedStyle(v).paddingLeft) : 0, row = document.querySelector('label[for="global-dial-d-Diameter"]').closest(".row"), parts = [...row.children].filter((c) => !c.matches("label") && c.offsetParent).map((c) => c.getBoundingClientRect()); window.dial_tool.value_pop_close(); return [w, Math.max(...parts.map((p) => p.right)) - Math.min(...parts.map((p) => p.left)) + 2 * pad]; });      // as wide as the row's controls (#514)
   const k = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--num-pop-k").trim());
   await tab("Hands");
   const side = await page.evaluate(() => { const r = [...document.querySelectorAll(".body > .row.side")].find((x) => x.offsetParent && x.querySelector('input[type="range"]')), q = (s) => r.querySelector(s).getBoundingClientRect(); return [Math.round(r.getBoundingClientRect().width), Math.round(q("label").width), Math.round(q('input[type="range"]').width), Math.round(q(".numbox").width), Math.round(parseFloat(getComputedStyle(r).gridTemplateColumns.split(" ")[1]))]; });
   await tab("Dial");
-  check(k === "0.75" && pop > 150 && pop < 200 && side[2] === side[4] && side[2] > side[0] / 3, `a phone: the controller at ${k} (${Math.round(pop)} px wide); a hand's row ${side[0]} wide: name ${side[1]}, slider ${side[2]} (its whole column, ${side[4]}), box ${side[3]}`);
+  check(k === "0.75" && Math.abs(pop - Math.max(span, 150)) < 2 && side[2] === side[4] && side[2] > side[0] / 3, `a phone: the controller at ${k}, as wide as the row's controls (${Math.round(pop)} px for ${Math.round(span)}, #514); a hand's row ${side[0]} wide: name ${side[1]}, slider ${side[2]} (its whole column, ${side[4]}), box ${side[3]}`);
 }
 await page.setViewportSize({ width: 1440, height: 900 });
 
@@ -2282,17 +2706,22 @@ check(await page.$eval("#ampm", (b) => b.firstElementChild && b.firstElementChil
 // ── under a finger: small controls are pressed from a little outside their edge too ──
 const touch = await browser.newContext({ viewport: { width: 1180, height: 820 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
 const pad = await touch.newPage();
-await pad.addInitScript(() => { if (!localStorage.getItem("dial-tool-last")) localStorage.setItem("dial-tool-last", "{}"); });      // the plain starting dial, not the opener (Okay's watch, 4.38.12)
-await pad.addInitScript(() => { if (!localStorage.getItem("dial-tool-folds")) localStorage.setItem("dial-tool-folds", '{"*":false}'); });      // every pane open (#270)
+await pad.addInitScript(() => { setTimeout(() => { if (!localStorage.getItem("dial-tool-last")) localStorage.setItem("dial-tool-last", "{}"); }, 0); });      // the plain starting dial, not the opener (Okay's watch, 4.38.12)
+await pad.addInitScript(() => { setTimeout(() => { if (!localStorage.getItem("dial-tool-folds")) localStorage.setItem("dial-tool-folds", '{"*":false}'); }, 0); });      // every pane open (#270)
 await pad.goto("file://" + process.cwd() + "/dial-tool.html");
 await pad.waitForFunction(() => window.dial_tool && window.dial_tool.statik, null, { timeout: 20000 });
 await pad.tap("#guides-more");
+await pad.tap("#guide-gd_hole-colour");      // a guide's dot opens its colours by it (#527)
 const reach = await pad.evaluate(() => {
-  const dots = [...document.querySelectorAll("#guide-list .guidekind:nth-child(2) .tone")], a = dots[2].getBoundingClientRect(), b = dots[3].getBoundingClientRect();
+  const dots = [...document.querySelectorAll("#guide-pop .tone")], a = dots[2].getBoundingClientRect(), b = dots[3].getBoundingClientRect();
   const at = (x, y) => document.elementFromPoint(x, y);
   return { coarse: matchMedia("(pointer: coarse)").matches, size: a.width, left: at(a.left - 5, a.top + a.height / 2) === dots[2], above: at(a.left + a.width / 2, a.top - 10) === dots[2], nearer_next: at(b.left - 5, b.top + b.height / 2) === dots[3] };
 });
 check(reach.coarse && reach.left && reach.above && reach.nearer_next, `under a finger a ${reach.size} dot is pressed from 5 beside it and 10 above it; nearer the next dot, the next one is`);
+await pad.tap("#guide-gd_hole-colour");      // its colours shut again
+{ const t = await pad.evaluate(() => { const d = document.querySelector("#guide-gd_axes-colour").getBoundingClientRect(), k = document.querySelector("#guide-gd_axes").getBoundingClientRect(), at = (x, y) => document.elementFromPoint(x, y);
+    return [at(d.left - 3, d.top + d.height / 2)?.id, at(k.right + 3, k.top + k.height / 2)?.closest("button")?.id, at(k.left + k.width / 2, k.top - 6)?.closest("button")?.id]; });
+  check(t[0] === "guide-gd_axes-colour" && t[1] === "guide-gd_axes" && t[2] === "guide-gd_axes", `under a finger a guide's dot and tick are pressed from just outside them (${t.join(" ")})`); }
 { // under a finger the number popup opens without taking the focus, so no keyboard comes up (4.46.1; Okay: "Value gets selected was the wrong choice, triggers the keypad on ipad")
   await pad.tap("#guides-more");      // the guides' list away again
   await pad.tap('label[for="global-dial-d-Diameter"]'); await pad.waitForTimeout(300);
@@ -2300,7 +2729,8 @@ check(reach.coarse && reach.left && reach.above && reach.nearer_next, `under a f
   check(typing[0] && !typing[1], "under a finger a number's popup opens with nothing chosen to type over: no keyboard comes up until the value is pressed");
   await pad.tap("#guides-more"); await pad.waitForTimeout(200);      // a press outside puts the popup away; the guides' list open again for what follows
 }
-await pad.touchscreen.tap(...await pad.$eval('#guide-list .guidekind:nth-child(2) .tone:nth-child(5)', (e) => { const r = e.getBoundingClientRect(); return [r.left - 4, r.top - 8]; }));
+await pad.tap("#guide-gd_axes-colour");      // the centre lines' colours, by its dot
+await pad.touchscreen.tap(...await pad.$eval('#guide-pop .tone:nth-child(5)', (e) => { const r = e.getBoundingClientRect(); return [r.left - 4, r.top - 8]; }));
 check(await pad.evaluate(() => window.dial_tool.S.gd_k_axes === 3), "a tap just outside a dot chooses it");
 await pad.tap("#global-c-plate-Plate-hex");
 const chip_reach = await pad.evaluate(() => { const c = [...document.querySelectorAll("#pop-palette button")], r = c[4].getBoundingClientRect(); return [document.elementFromPoint(r.left - 4, r.top + 4) === c[4], document.querySelector("#global-c-plate-Plate-hex").tagName === "SPAN", !document.querySelector("#colour-pop").hidden]; });
@@ -2334,6 +2764,26 @@ check(chip_reach.every(Boolean), "the hex in a pill opens the pop-out and isn't 
   check(scrub[0] && scrub[1], `under a finger a slider opens the controller and the same finger, sliding on, changes the value at once (${scrub[2]} → ${scrub[3]})`);
 }
 await pad.screenshot({ path: path.join(OUT, "12-touch.png") });
+{ // a finger on a named slider (the Shadows pane's Angle · Height · Strength, R15 form D): the controller opens and stays while the finger slides, the value following (Okay, 25 Oct 2026, 17:21: "these new sliders up top are dismissing prematurely with controller"); as a part's row does
+  await pad.evaluate(() => { const l = document.querySelector("#shadow-list"); if (!l || l.hidden) document.querySelector("#shadows-more").click(); }); await pad.waitForTimeout(300);
+  const cdp = await touch.newCDPSession(pad);
+  const finger = async (type, x, y) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x, y }] });
+  const seen = async (sel) => {
+    const b = await pad.$eval(sel, (e) => { const r = e.getBoundingClientRect(); return [r.left + r.width * 0.4, r.top + r.height / 2]; });
+    const was = await pad.evaluate(() => [window.dial_tool.S.sh_rise, window.dial_tool.S.sh_cap]);
+    const open = () => pad.evaluate(() => !!document.querySelector("#value-pop:not(.fading)"));
+    await finger("touchStart", b[0], b[1]); await pad.waitForTimeout(100); const a = await open();
+    await finger("touchMove", b[0] + 30, b[1]); await pad.waitForTimeout(200); const c = await open();
+    await finger("touchEnd", 0, 0); await pad.waitForTimeout(100);
+    const now = await pad.evaluate(() => [window.dial_tool.S.sh_rise, window.dial_tool.S.sh_cap]);
+    await pad.evaluate((v) => { const t = window.dial_tool; t.set_value("global", "sh_rise", v[0]); t.set_value("global", "sh_cap", v[1]); t.value_pop_close(); }, was);
+    return { opened: a, stayed: c, moved: now.join() !== was.join() };
+  };
+  const named = await seen('#shadow-list .three .row.named:nth-child(2) input[type="range"]'), row = await seen('#shadow-list .shaderows .row[data-part="cap"] input[type="range"]');
+  await pad.evaluate(() => document.querySelector("#shadows-more").click()); await pad.waitForTimeout(200);
+  check(named.opened && named.stayed && named.moved && row.opened && row.stayed && row.moved,
+    `a finger on a named slider opens the controller and it stays while the finger slides, the value following (${JSON.stringify(named)}), as on a part's row (${JSON.stringify(row)})`);
+}
 await touch.close();
 
 { // the selected ring's handles on its guides (4.65; farukahmet's PR #2, Okay: "implemented in our ways and design … all these handles should be in guide color"): radius on the dotted line, size on the far edge, start and span round the outside; dragged, they set the ring as its rows do
@@ -2352,7 +2802,7 @@ await touch.close();
   hs.splice(0, hs.length, ...hs2);
   const z0 = await S("S.rings[S.ui_ring].size"); await move("size", ...radial("size", -mm * 0.5)); const z1 = await S("S.rings[S.ui_ring].size");
   const st = hs.find((x) => x[0] === "start"), rr = Math.hypot(st[1] - c[0], st[2] - c[1]);
-  await page.mouse.move(st[1], st[2]); await page.mouse.down(); await page.mouse.move(c[0] + rr * 0.7, c[1] - rr * 0.7, { steps: 4 }); await page.mouse.move(c[0] + rr, c[1], { steps: 4 }); await page.mouse.up(); await frame();
+  await page.mouse.move(st[1], st[2]); await page.mouse.down(); const a_st = Math.atan2(st[1] - c[0], c[1] - st[2]); for (let k = 1; k <= 24; k++) { const a = a_st + (Math.PI / 2 - a_st) * k / 24; await page.mouse.move(c[0] + rr * Math.sin(a), c[1] - rr * Math.cos(a)); } await page.mouse.up();      // round the ring, never straying from it: whole steps (#486) await frame();
   const start = await S("S.rings[S.ui_ring].start");
   await page.evaluate((w) => { const t = window.dial_tool; for (const [k, v] of [["r", w[0]], ["size", w[1]], ["start", w[2]], ["span", w[3]]]) t.set_value("ring", k, v); }, was);
   await tab("Dial"); const gone = await page.$$eval(".handles .handle", (e) => e.length);
@@ -2373,25 +2823,100 @@ await touch.close();
   check(look[0] && look[1] && look[2] && look[3] === "600" && look[4] === "" && follow.join() === "7,07/10,CMT,",
     `the date stands touching AM · PM, today's to start, stacked day over month in Inter SemiBold (the year left out since 4.82) (Barlow Bold in 4.62) (${look.join(" ")}); 7 Oct 2028 set, a following date window says ${follow[0]} and the bar ${follow[1]}; a day window in Turkish ${follow[2]}; Now brings today back`);
 }
-{ // a case round the dial, preview only (4.66; farukahmet's PR #3 "abstractified": "low number of colors, thick lines, minimal … One highlight one shadow")
+{ // the case round the dial (Okay, 23 Oct 2026: "On main default is caseless", "sillhouette means filled in. engineer without the lines, 3 shades of gray", "case toggle does not bring in strap")
   const z0 = await page.evaluate(() => window.dial_tool.z);
+  const seen = () => page.evaluate(() => { const t = window.dial_tool, g = document.querySelector("g.bezel"), paths = [...g.querySelectorAll("path")];
+    return { on: t.S.ui_case, bezel: t.S.bezel, paths: paths.length, filled: paths.some((p) => p.getAttribute("fill") && p.getAttribute("fill") !== "none"), lined: paths.some((p) => p.getAttribute("stroke") && !["none", p.getAttribute("fill")].includes(p.getAttribute("stroke")) && !(p.getAttribute("stroke") || "").startsWith("#d8")), greys: new Set(paths.map((p) => p.getAttribute("fill")).filter((c) => c && c.startsWith("#") && c !== "#d8d6cf").map((c) => { const n = parseInt(c.slice(1), 16), r = n >> 16, g = n >> 8 & 255, b = n & 255; return Math.max(r, g, b) - Math.min(r, g, b) < 12; })).has(false) ? "colour" : "grey", word: document.querySelector("#case .word").textContent, lit: document.querySelector("#case").classList.contains("on"),
+      faint: +getComputedStyle(g).opacity, z: t.z, under: Boolean(g.compareDocumentPosition(t.dial) & Node.DOCUMENT_POSITION_FOLLOWING), strap: Boolean(document.querySelector("#strap, #strap-pick, #strap-colour")) }; });
+  const none = await seen();
   await page.selectOption("#case-pick", "1"); await frame();
-  const on = await page.evaluate(() => { const t = window.dial_tool, g = document.querySelector("g.bezel"), fills = new Set([...g.querySelectorAll("path")].map((p) => p.getAttribute("fill"))), svg = t.statik && window.dial_tool;
-    return [t.S.bezel, g.querySelectorAll("path").length, fills.size, document.querySelector("#case .word").textContent, t.z, g.compareDocumentPosition(t.dial) & Node.DOCUMENT_POSITION_FOLLOWING ? true : false]; });
-  // its strap (4.69; Okay, 22:35: "Add straps to bezels metal bands too, same style … Add strap color change option"; "Fit and previews care about the dial still")
-  const fills = () => page.evaluate(() => [...document.querySelectorAll("g.bezel path")].map((p) => p.getAttribute("fill")));
-  const leather = await fills(), strap_on = await page.evaluate(() => [!document.querySelector("#strap").hidden, document.querySelector("#strap .word").textContent, !document.querySelector("#strap-colour").hidden]);
-  await page.evaluate(() => window.dial_tool.set_value("global", "c_strap", [0.1, 0.25, 0.45, 1])); await frame();
-  const blue = await fills();
-  await page.selectOption("#strap-pick", "2"); await frame();
-  const bracelet = await fills(), chip = await page.evaluate(() => document.querySelector("#strap-colour").hidden);
-  await page.evaluate(() => { const t = window.dial_tool; t.set_value("global", "strap", 1); t.set_value("global", "c_strap", [0.29, 0.2, 0.14, 1]); }); await frame();
-  await page.selectOption("#case-pick", "0"); await frame();
-  const off = await page.evaluate(() => [window.dial_tool.S.bezel, document.querySelector("g.bezel").childElementCount, document.querySelector("#case .word").textContent, window.dial_tool.z, document.querySelector("#strap").hidden]);
-  check(on[0] === 1 && on[1] > 20 && on[2] <= 8 && on[3] === "Diver" && Math.abs(on[4] - z0) < 1e-6 && on[5] && off[0] === 0 && off[1] === 0 && off[2] === "Case" && Math.abs(off[3] - z0) < 1e-6 && off[4],
-    `a case round the dial: Diver drawn under the dial in ${on[2]} tones (${on[1]} parts) with its strap; the view stays on the dial (${z0.toFixed(2)} → ${on[4].toFixed(2)}); No case takes both away`);
-  check(strap_on.join() === "true,Strap,true" && blue.includes("#1A4073") && !leather.includes("#1A4073") && bracelet.length > leather.length && !bracelet.includes("#1A4073") && chip,
-    `its strap: a switch beside Case while a case is on (${strap_on.join(" ")}); a new strap colour repaints it; a bracelet is links in the case's metal (${bracelet.length} parts), no chip`);
+  const diver = await seen();
+  await page.selectOption("#case-pick", "2"); await frame();
+  const field = await seen();
+  await page.selectOption("#case-pick", "none"); await frame();
+  const off = await seen();
+  check(!none.on && none.paths === 0 && none.word === "Case" && !none.lit && !none.strap && diver.on && diver.bezel === 1 && diver.word === "Diver" && diver.lit && diver.paths > 5 && diver.filled && !diver.lined && diver.greys === "grey" && diver.under && Math.abs(diver.z - z0) < 1e-6 && field.bezel === 2 && field.paths > 5 && !field.lined && !off.on && off.paths === 0 && off.bezel === 2,
+    `the case round the dial: none to start, no strap switch; Diver and Field by the menu, each filled in, the Engineer's parts without a line, in greys (${diver.paths} parts), under the dial; the view stays on the dial; No case takes it away and keeps the kind for show mode`);
+}
+{ // a press on empty canvas deselects (Okay, 23 Oct 2026: "DESELECT anything that is selected (guides disappear)"); the Shadows pane wide again ("Bring back old shadows pane, wide one")
+  await tab("Rings"); await frame();
+  const before = await page.evaluate(() => document.querySelectorAll(".handles .handle").length);
+  const m = await page.$eval("main", (e) => { const r = e.getBoundingClientRect(); return [r.left + 40, r.top + r.height / 2]; });
+  await page.mouse.click(m[0], m[1]); await frame();
+  const after = await page.evaluate(() => [document.querySelectorAll(".handles .handle").length, window.dial_tool.unselected]);
+  await page.evaluate(() => window.dial_tool.select_ring(window.dial_tool.S.ui_ring)); await frame();
+  const back = await page.evaluate(() => document.querySelectorAll(".handles .handle").length);
+  await tab("Dial");
+  await page.click("#shadows-more"); await frame();
+  const pane = await page.evaluate(() => { const l = document.querySelector("#shadow-list"), s = l.querySelector('input[type="range"]'); return [Math.round(l.getBoundingClientRect().width), Math.round(s.getBoundingClientRect().width)]; });
+  await page.click("#shadows-more");
+  check(before > 0 && after[0] === 0 && after[1] && back === before && pane[1] >= 80,
+    `a press on empty canvas deselects: the ring's handles (${before} → ${after[0]}) and its guides go, and come back when a ring is chosen (${back}); the Shadows pane ${pane[0]} px wide, its sliders ${pane[1]}`);
+}
+{ // the Shadows pane to Okay's drawing of 25 Oct 2026 (#526, "pixel perfect"; dial-tool-shadows-pane-4.93_O.pdf): one box on top — the sun's picture, and Angle · Height · Strength in a column as wide as the diagram, fat tracks, the value in the knob; a hairline, the heading line, then one line per part across both columns, each part of the diagram on its row's line; the heights keep their order (LIMIT); a row per window's disc; the footer in cells
+  await page.click("#shadows-more"); await frame();
+  const was = await page.evaluate(() => [window.dial_tool.S.sh_from, window.dial_tool.S.sh_rise, window.dial_tool.S.sh_second]);
+  const pane = await page.evaluate(() => { const l = document.querySelector("#shadow-list"), pic = l.querySelector("#shadows-sun"), r = pic.getBoundingClientRect(), R = (e) => e.getBoundingClientRect(), round = (x) => Math.round(x);
+    const ev = (type, x, y) => pic.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: r.left + x, clientY: r.top + y, pointerId: 1, pointerType: "mouse", button: 0 }));
+    ev("pointerdown", r.width * 0.85, r.height * 0.2); ev("pointerup", r.width * 0.85, r.height * 0.2);
+    const t = window.dial_tool, named = [...l.querySelectorAll(".row.named")], three = l.querySelector(".three"), top = l.querySelector(".suntop"), rows = [...l.querySelectorAll(".shaderows .row")], stack = l.querySelector("#shadows-stack"), sr = R(stack), tr = R(top), lr = R(l), head = l.querySelector(".shadehead");
+    const row = l.querySelector('.row[data-part="second"]'); row.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
+    const parts = [...stack.querySelectorAll(".parts > g")], lit = parts.filter((g) => g.classList.contains("lit")).map((g) => g.dataset.part), drop = stack.querySelector(".drop"), dash = drop.querySelector(".moving"), solid = drop.querySelector(".fixed");
+    const minutes_y = R(stack.querySelector('.parts > g[data-part="minute"] line')).top, plate_y = R(stack.querySelector('.parts > g[data-part="plate"] ellipse')).top + R(stack.querySelector('.parts > g[data-part="plate"] ellipse')).height / 2;
+    const dashed = getComputedStyle(dash).strokeDasharray !== "none" && Math.abs(+dash.getAttribute("y2") - +solid.getAttribute("y1")) < 0.1 && Math.abs(minutes_y - R(dash).bottom) <= 1 && Math.abs(plate_y - R(solid).bottom) <= 1 && getComputedStyle(solid).strokeDasharray === "none" && [...stack.querySelectorAll("svg > *")].at(-1) === stack.querySelector(".parts.top") && stack.querySelector(".parts.top .lit") !== null && stack.querySelector(".parts.top").previousElementSibling === drop;
+    const off = rows.map((x) => { const g = stack.querySelector(`.parts > g[data-part="${x.dataset.part || "plate"}"]`); if (!g) return 99; const e = g.querySelector("ellipse, line, path"), rr = R(x); return +(R(e).top + R(e).height / 2 - (rr.top + rr.height / 2)).toFixed(1); }), on_line = off.every((d) => Math.abs(d) <= 1.5);
+    const foot = l.querySelector(".shadefoot"), fr = R(foot), cells = [...foot.querySelectorAll(".cell")].map(R), lines = [...foot.querySelectorAll(".cell")].slice(1).map((c) => getComputedStyle(c).borderLeftWidth);
+    // the limits: the seconds hand's slider runs from the minutes' height + a step to the cap's − a step; the end flashes LIMIT
+    const sec = row.querySelector('input[type="range"]'), minutes = t.S.sh_minute, cap = t.S.sh_cap;
+    const labels = rows.map((x) => x.querySelector("label").textContent);
+    const field = row.querySelector('input[type="text"]'); field.value = "9"; field.dispatchEvent(new Event("change", { bubbles: true }));
+    const limit = row.querySelector("label").textContent, limit_colour = getComputedStyle(row.querySelector("label")).color, taken = t.S.sh_second;
+    return { from: t.S.sh_from, rise: t.S.sh_rise, knobs: named.map((n) => n.querySelector(".knobval").textContent), names: named.map((n) => n.querySelector("label").textContent), rays: pic.querySelectorAll(".rays line").length,
+      box: round(tr.height) === 204 && round(R(three).width) === round(sr.width) && round(R(three).right) === round(tr.right) && round(tr.left - R(l.querySelector(".shadescroll")).left) === 25 && round(R(l.querySelector(".shadescroll")).right - tr.right) === 25, pad: round(tr.top - R(l.querySelector(".shadescroll")).top),
+      head: head.textContent === "Part Heights" && round(R(head).height) === 34 && round(R(l.querySelector(".shadecol")).top - tr.bottom) === 14 && round(sr.top) === round(R(l.querySelector(".shadecol")).top), word: stack.querySelector(".word").textContent,
+      labels, off, heights: rows.map((x) => round(R(x).height)), on_line, lit, dropped: drop.classList.contains("on") && dashed, width: round(lr.width), under: round(sr.bottom - R(rows.at(-1)).bottom),
+      foot: round(fr.height) === 53 && Math.abs(fr.left - lr.left) <= 1 && Math.abs(fr.right - lr.right) <= 1 && cells.length === 4 && lines.every((w) => w === "1px") && cells.every((c) => round(c.height) === 53) && round(cells[0].width) === 120 && Math.abs(cells[2].width - 167) <= 3 && Math.abs(cells[3].right - lr.right) <= 1, cells: cells.map((c) => round(c.width)),
+      bounds: [+sec.min, +sec.max, +(minutes + 0.05).toFixed(2), +(cap - 0.05).toFixed(2)], limit, red: limit_colour === "rgb(255, 0, 0)", taken, shadows_tick: foot.querySelector('#shadows-on') !== null }; });
+  await page.evaluate((v) => { const t = window.dial_tool; t.set_value("global", "sh_from", v[0]); t.set_value("global", "sh_rise", v[1]); t.set_value("global", "sh_second", v[2]); }, was);
+  await page.click("#shadows-more");
+  check(pane.from > 0 && pane.from < 90 && pane.rise < 35 && pane.knobs[0] === String(pane.from) && pane.knobs[1] === String(pane.rise) && pane.names.join() === "Angle°,Height,Strength %" && pane.rays === 16 && pane.box && pane.pad === 25 && pane.head && pane.word === "Parts"
+    && pane.width === 498 && pane.labels.slice(0, 5).join() === "Cap,Seconds,Minutes,Hours,Plate" && pane.heights.every((h) => h === 34) && pane.on_line && pane.lit.join() === "second" && pane.dropped && pane.under === 21 && pane.foot && pane.shadows_tick
+    && pane.bounds[0] === pane.bounds[2] && pane.bounds[1] === pane.bounds[3] && pane.limit === "LIMIT" && pane.red && pane.taken === pane.bounds[3],
+    `the Shadows pane to Okay's drawing (25 Oct 2026, "pixel perfect"): the top box 204 high with the sliders' column as wide as the diagram (${pane.box}), 25 inside the edge (${pane.pad}); the heading line 34 high, 14 under the box, the diagram's box from its line (${pane.head}); the parts ${pane.labels.join(" · ")} on 34 lines, each drawn on its row's line (off by ${pane.off.join(" ")}), the one under the pointer lit, its height a red line over the grey parts down to the plate — dashed from the part to the next one toward the plate, solid under it — and the white part over the red (${pane.lit}, ${pane.dropped}); the pane ${pane.width} wide on every screen; the box 21 under the last line (${pane.under}); the footer 53 high in four cells, hairlines between, 120 · … · 167 · to the edge (${pane.cells.join(" · ")}: ${pane.foot}); the seconds hand's slider runs between the minutes' and the cap's heights (${pane.bounds.join(" ")}) and a value past them flashes LIMIT in red (${pane.limit}, ${pane.red}, ${pane.taken} taken)`);
+}
+{ // a row per window that shows a disc, under the plate, round the dial from 12, each with its own depth (`depth`; null = the shared sh_disc)
+  const discs = await page.evaluate(() => { const t = window.dial_tool, S = t.S, wins = window.dial_tool.S.windows || [], keep = JSON.stringify([S.da_on, S.da_kind, S.da_at, wins]);
+    S.da_on = true; S.da_kind = 0; S.da_at = 0; S.windows = S.windows.map((w, i) => ({ ...w, on: true, kind: [1, 2, 3][i], at: [4, 2, 3][i] })); t.changed(); t.sync_rows(); t.render();
+    document.querySelector("#shadows-more").click();
+    const l = document.querySelector("#shadow-list"), rows = [...l.querySelectorAll(".shadowdiscs .row")];
+    const field = rows[0].querySelector('input[type="text"]'); field.value = "0.4"; field.dispatchEvent(new Event("change", { bubbles: true }));
+    const out = { labels: rows.map((x) => x.querySelector("label").textContent), own: window.dial_tool.S.windows[0].depth, others: window.dial_tool.S.windows.slice(1).map((w) => w.depth), first: window.dial_tool.S.da_depth, parts: [...l.querySelectorAll('#shadows-stack .parts > g[data-part^="disc"]')].length };
+    document.querySelector("#shadows-more").click();
+    const [on, kind, at, w] = JSON.parse(keep); S.da_on = on; S.da_kind = kind; S.da_at = at; S.windows = w; for (const x of S.windows) delete x.depth; t.changed(); t.sync_rows(); t.render();
+    return out; });
+  check(discs.labels.join() === "Disc at 12,Disc at 3,Disc at 6" && discs.parts === 3 && discs.own === 0.4 && discs.others.every((d) => d == null),
+    `a row per window with a disc, round the dial from 12 (${discs.labels.join(" · ")}; the moon window at 9 has none), ${discs.parts} in the diagram; a row sizes its own window's disc (${discs.own}; the others ${discs.others.join()})`);
+}
+{ // 20 Oct 2026 notes (#481, #482, #485, #486): the steps' chevron pale with no steps; the Settings buttons equal; handles with guides off, finer away
+  await tab("Rings");
+  const look = await page.evaluate(() => { const t = window.dial_tool; t.S.guides = false; t.select_ring(0); t.render(); return [document.querySelectorAll(".handles .handle").length, document.querySelectorAll(".handles .handle .seat").length]; });
+  // a radius handle dragged a mm out along its line moves it a mm; the same mm out but 80 px to the side, less (#406's FINE)
+  const h = await page.evaluate(() => { const r = document.querySelector('.handles .handle[data-handle="radius"] .seat').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+  const c = await page.evaluate(() => { const b = document.querySelector("main svg").getBoundingClientRect(), t = window.dial_tool; return [b.left + t.c[0], b.top + t.c[1], t.z]; });
+  const u = [h[0] - c[0], h[1] - c[1]], l = Math.hypot(...u), out = [u[0] / l, u[1] / l], side = [-out[1], out[0]];
+  const r0 = await S("S.rings[S.ui_ring].r");
+  await page.mouse.move(...h); await page.mouse.down();
+  for (let k = 1; k <= 10; k++) await page.mouse.move(h[0] + side[0] * 8 * k, h[1] + side[1] * 8 * k);      // out to the side first: no radius change to speak of
+  const r_side = await S("S.rings[S.ui_ring].r");
+  for (let k = 1; k <= 10; k++) await page.mouse.move(h[0] + side[0] * 80 + out[0] * c[2] * k / 10, h[1] + side[1] * 80 + out[1] * c[2] * k / 10);
+  await page.mouse.up(); await frame();
+  const r1 = await S("S.rings[S.ui_ring].r");
+  await page.evaluate((r) => window.dial_tool.set_value("ring", "r", r), r0);
+  await tab("Export");
+  const chev = await page.evaluate(() => { const t = window.dial_tool, H = t.history_more, was = [t.constructor && 0]; return [H.classList.contains("none"), H.getAttribute("aria-disabled")]; });
+  const even = await page.$$eval("#save, #save + .btn", (b) => b.map((x) => Math.round(x.getBoundingClientRect().width)));
+  check(look[0] >= 3 && look[0] === look[1] && r1 - r0 > 0.05 && r1 - r0 < 0.8 && even.every((w) => w === even[0]) && chev[1] === String(chev[0]),
+    `with the guides off the selected ring's ${look[0]} handles show, each on a disc (#486); a mm out at 80 px to the side moves its radius ${(r1 - r0).toFixed(2)} mm, not 1 (#486, as #406); the steps' chevron pale when there are no steps (${chev.join(" ")}; #481); Settings' buttons one width (${even.join(" ")}; #482)`);
 }
 { // the windows' discs (4.72, #346; 4.88 — Okay, 19 Oct 2026: "Xray makes the unseen full visible, sensible z height differences (not editable) and a stacking order. Selected shows above all others. Top is 100% opacity, with a white dotted outline, below gets -15 opacity gradually"): X-ray, a switch under Guides while a date, day or am · pm window is on, draws every disc whole in a stack — the selected window's on top, full, dotted white; the hands, the face and the other discs each 15 % fainter than the one above; the disc's edges are dashed guides; physics on, a disc past the case turns its outer edge red and the panel says by how much
   await tab("Date");
@@ -2401,21 +2926,21 @@ await touch.close();
   const shown = await page.evaluate(() => !document.querySelector("#xray").hidden);
   await page.click("#xray"); await frame();
   const look = await page.evaluate(() => { const t = window.dial_tool, it = t.items, plate = it.find((i) => i.role === "plate"), hand = it.find((i) => i.role === "hand"), disc = it.find((i) => i.role === "disc");
-    return [t.S.xray, it.filter((i) => i.role === "disc").length, it.filter((i) => i.role === "disc print").length, +plate.fill[3].toFixed(2), it.filter((i) => i.role === "guide" && i.dashes).length, +hand.fill[3].toFixed(2), disc.fill[3], it.filter((i) => i.role === "disc edge" && i.dots && i.stroke[0] === 1).length, it.indexOf(disc) > it.indexOf(plate)]; });
+    return [t.S.xray, it.filter((i) => i.role === "disc").length, it.filter((i) => i.role === "disc print").length, +plate.fill[3].toFixed(2), it.filter((i) => i.role === "guide" && i.spaced).length, +hand.fill[3].toFixed(2), disc.fill[3], it.filter((i) => i.role === "disc edge" && i.dots && i.stroke[0] === 1).length, it.indexOf(disc) > it.indexOf(plate)]; });
   // a second window with a disc, not selected: its disc under the face, a step fainter, drawn before the plate
   await page.evaluate(() => { const t = window.dial_tool; t.S.ui_window = 1; t.set_value("window", "on", true); t.set_value("window", "kind", 2); t.S.ui_window = 0; t.sync_rows(); t.render(); }); await frame();
   const stack = await page.evaluate(() => { const t = window.dial_tool, it = t.items, plate = it.find((i) => i.role === "plate"), other = it.find((i) => i.role === "disc" && i.window === 1), top = it.find((i) => i.role === "disc" && i.window === 0);
     return [+other.fill[3].toFixed(2), it.indexOf(other) < it.indexOf(plate), top.fill[3], it.indexOf(top) > it.indexOf(plate), +plate.fill[3].toFixed(2)]; });
   await page.evaluate(() => { const t = window.dial_tool; t.S.ui_window = 1; t.set_value("window", "on", false); t.S.ui_window = 0; t.sync_rows(); t.render(); }); await frame();
   await page.evaluate(() => window.dial_tool.set_value("window", "r", 13.5)); await frame();
-  const broken = await page.evaluate(() => { const it = window.dial_tool.items; return [it.some((i) => i.role === "guide" && i.dashes && i.stroke[0] > 0.85 && i.stroke[1] < 0.3), [...document.querySelectorAll(".row.note .quiet")].map((e) => e.textContent).find((x) => x.includes("passes the case")) || ""]; });
+  const broken = await page.evaluate(() => { const it = window.dial_tool.items; return [it.some((i) => i.role === "guide" && i.spaced && i.stroke[0] > 0.85 && i.stroke[1] < 0.3), [...document.querySelectorAll(".row.note .quiet")].map((e) => e.textContent).find((x) => x.includes("passes the case")) || ""]; });
   await page.evaluate(() => window.dial_tool.set_value("window", "physics", false)); await frame();
-  const free = await page.evaluate(() => { const it = window.dial_tool.items; return [it.some((i) => i.role === "guide" && i.dashes && i.stroke[0] > 0.85 && i.stroke[1] < 0.3), [...document.querySelectorAll(".row.note .quiet")].some((e) => e.textContent.includes("passes the case") && e.closest(".row").checkVisibility())]; });
+  const free = await page.evaluate(() => { const it = window.dial_tool.items; return [it.some((i) => i.role === "guide" && i.spaced && i.stroke[0] > 0.85 && i.stroke[1] < 0.3), [...document.querySelectorAll(".row.note .quiet")].some((e) => e.textContent.includes("passes the case") && e.closest(".row").checkVisibility())]; });
   await shot("13-xray");
   await page.evaluate((w) => { const t = window.dial_tool, v = JSON.parse(w); t.S.ui_window = 0; t.set_value("window", "physics", v[4]); t.set_value("window", "r", v[3]); t.set_value("window", "kind", v[2]); t.set_value("window", "on", v[1]); t.set_value("global", "xray", v[5]); t.S.ui_window = v[0]; t.sync_rows(); t.render(); }, was);
   check(shown && look[0] === true && look[1] === 1 && look[2] === 1 && look[3] === 0.7 && look[4] === 2 && look[5] === 0.85 && look[6] === 1 && look[7] === 2 && look[8]
     && stack[0] === 0.55 && stack[1] && stack[2] === 1 && stack[3] && stack[4] === 0.7 && broken[0] && /passes the case by 0\.\d\d mm/.test(broken[1]) && !free[0] && !free[1],
-    `X-ray (4.88): the selected date window's disc on top, whole, at 100 % with two dotted white edges; the hands at 85 %, the face at 70 % (${look.join(" ")}); a second window's disc under the face at 55 % (${stack.join(" ")}); the disc's edges two dashed guides; at r 13.5 its outer edge red and "${broken[1]}"; physics off, neither (${free.join(" ")})`);
+    `X-ray (4.88): the selected date window's disc on top, whole, at 100 % with two dotted white edges; the hands at 85 %, the face at 70 % (${look.join(" ")}); a second window's disc under the face at 55 % (${stack.join(" ")}); the disc's edges two spaced dotted guides (#485); at r 13.5 its outer edge red and "${broken[1]}"; physics off, neither (${free.join(" ")})`);
 }
 { // the moon's pictures (4.73, #346; the disc sketches B: "All are good"): Arch · Phase (three colours, a round hole) · Line (one ink); an am · pm window has one picture (4.88; Okay, 19 Oct 2026: "Am pm should be one half of a circle each"): a half-round hole over a disc half am, half pm, plain, whatever its old look for now)
   await tab("Date");
